@@ -1,0 +1,57 @@
+{
+  "name": "printly-desktop",
+  "version": "1.0.0",
+  "description": "PRINTLY Desktop App for Print Shops",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "build:main": "tsc",
+    "build:renderer": "webpack --mode development",
+    "build": "npm run build:main && npm run build:renderer",
+    "start": "npm run build && electron ."
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.38.0",
+    "axios": "^1.13.2",
+    "electron": "^28.0.0",
+    "lucide-react": "^0.554.0",
+    "mammoth": "^1.11.0",
+    "pdf-lib": "^1.17.1",
+    "pdf-to-printer": "^5.6.1",
+    "pdfjs-dist": "^4.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-pdf": "^10.2.0",
+    "ws": "^8.14.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.38",
+    "@types/react-dom": "^18.2.17",
+    "@types/ws": "^8.5.8",
+    "autoprefixer": "^10.4.22",
+    "copy-webpack-plugin": "^13.0.1",
+    "css-loader": "^6.8.1",
+    "electron-builder": "^24.9.1",
+    "html-webpack-plugin": "^5.5.3",
+    "postcss": "^8.5.6",
+    "postcss-loader": "^8.2.0",
+    "style-loader": "^3.3.3",
+    "tailwindcss": "^3.4.18",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.3.0",
+    "webpack": "^5.89.0",
+    "webpack-cli": "^5.1.4"
+  },
+  "build": {
+    "appId": "com.printly.app",
+    "productName": "PRINTLY",
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}

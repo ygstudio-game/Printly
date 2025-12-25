@@ -1,0 +1,86 @@
+# --- OS / Editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# --- Logs ---
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# --- Dependency directories ---
+node_modules/
+jspm_packages/
+bower_components/
+web_modules/
+
+# --- Build output (all apps) ---
+dist/
+build/
+coverage/
+.nyc_output/
+lib-cov/
+build/Release
+
+# --- Next.js specific ---
+.next/
+out/
+.vercel/
+
+# --- Electron / desktop specific ---
+# Electron packager / builder output
+release/
+out-electron/
+electron-out/
+*.asar
+
+# If you use electron-builder:
+dist_electron/
+*.snap
+*.deb
+*.AppImage
+*.dmg
+*.exe
+*.msi
+
+# --- TypeScript caches ---
+*.tsbuildinfo
+
+# --- Package manager caches ---
+.npm/
+.yarn/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+.pnpm-store/
+
+# --- Env / secrets (VERY IMPORTANT) ---
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.test
+
+# --- Misc tools ---
+.eslintcache
+.stylelintcache
+.parcel-cache
+.cache/
+.serverless/
+.dynamodb/
+.fusebox/
+.docusaurus/
+.temp
+
+# --- OS trash / misc ---
+*.orig
+*.rej
