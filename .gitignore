@@ -5,7 +5,7 @@ Thumbs.db
 .vscode/
 *.swp
 Information/
-backups/
+backup/
 # --- Logs ---
 logs
 *.log
