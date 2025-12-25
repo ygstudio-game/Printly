@@ -4,7 +4,8 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
-
+Information/
+backups/
 # --- Logs ---
 logs
 *.log
