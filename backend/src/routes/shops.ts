@@ -1,16 +1,16 @@
   import { Router, Request, Response } from 'express';
-  import Shop from '../models/Shop';
-  import Printer from '../models/Printer';
-  import User from '../models/User';
-  const router = Router();
+  import Shop from '../models/Shop.js';
+  import Printer from '../models/Printer.js';
+  import User from '../models/User.js';
+  import PrintJob from '../models/PrintJob.js';
+  import { authMiddleware ,AuthRequest} from '../middleware/auth.js';
   import mongoose from 'mongoose';
-  import bcrypt from 'bcryptjs';
   import { nanoid } from 'nanoid';
-import PrintJob from '../models/PrintJob';
-import { log } from 'console';
-import { loadavg } from 'os';
-import { authMiddleware ,AuthRequest} from '../middleware/auth';
-import jwt from 'jsonwebtoken';
+  import bcrypt from 'bcryptjs';
+  import { log } from 'console';
+  import { loadavg } from 'os';
+  import jwt from 'jsonwebtoken';
+  const router = Router();
 
 function generateToken(userId: string) {
   const secret = process.env.JWT_SECRET!;

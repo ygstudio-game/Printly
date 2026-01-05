@@ -1,12 +1,12 @@
 // backend/src/routes/jobs.ts
 import { Router, Request, Response } from 'express';
-import PrintJob from '../models/PrintJob';
-import Shop from '../models/Shop';
-import Printer from '../models/Printer';
+import PrintJob from '../models/PrintJob.js';
+import Shop from '../models/Shop.js';
+import Printer from '../models/Printer.js';
 import { nanoid } from 'nanoid';
 import mongoose from 'mongoose';
-import Counter from '../models/Counter';
-import { authMiddleware,AuthRequest } from '../middleware/auth';
+import Counter from '../models/Counter.js';
+import { authMiddleware,AuthRequest } from '../middleware/auth.js';
 import { log } from 'console';
 import { createClient } from '@supabase/supabase-js'; 
 const router = Router();
@@ -78,7 +78,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
     });
 
     // ✅ Notify with complete job object
-    const { notifyShop } = await import('../server');
+    const { notifyShop } = await import('../server.js');
     const jobData = {
       ...job.toObject(),
       _id: job._id.toString(),

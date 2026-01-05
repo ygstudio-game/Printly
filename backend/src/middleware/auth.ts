@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import User from '../models/User';
-import Shop from '../models/Shop';
+import User from '../models/User.js';
+import Shop from '../models/Shop.js';
 
 export interface AuthRequest extends Request {
   userId?: string;

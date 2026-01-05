@@ -11,13 +11,13 @@ import cors from 'cors';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 
-import authRoutes from './routes/auth';
-import shopsRoutes from './routes/shops';
-import printersRoutes from './routes/printers';
-import jobsRoutes from './routes/jobs';
-import filesRoutes from './routes/files';
-import adminRoutes from './routes/admin';
-import PrintJob from './models/PrintJob';
+import authRoutes from './routes/auth.js';
+import shopsRoutes from './routes/shops.js';
+import printersRoutes from './routes/printers.js';
+import jobsRoutes from './routes/jobs.js';
+import filesRoutes from './routes/files.js';
+import adminRoutes from './routes/admin.js';
+import PrintJob from './models/PrintJob.js';
 
 const app = express();
 const server = createServer(app);
@@ -25,7 +25,7 @@ const wss = new WebSocketServer({ server });
 
 // Middleware
 const allowedOrigins = process.env.NODE_ENV === 'production'
-  ? ['https://printly.vercel.app']
+  ? process.env.FRONTEND_URL_PRODUCTION || 'http://printly.'
   : ['http://localhost:3000'];
 
 app.use(cors({

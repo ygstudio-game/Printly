@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
-import Printer from '../models/Printer';
-import { authMiddleware, AuthRequest } from '../middleware/auth';  // import your auth middleware
+import Printer from '../models/Printer.js';
+import { authMiddleware, AuthRequest } from '../middleware/auth.js';  // import your auth middleware
 
 const router = Router();
 
