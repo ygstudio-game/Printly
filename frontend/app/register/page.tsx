@@ -1,15 +1,18 @@
-// app/register/page.tsx
 'use client';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Mail, Lock, Loader2, Printer, User } from 'lucide-react';
+import { Mail, Lock, Loader2, Printer, User, ArrowRight } from 'lucide-react';
 import { register } from '@/lib/api';
 import { useStore } from '@/lib/store';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { userId, isGuest, setAuth } = useStore(); // ✅ Get userId and isGuest from store
+  const { userId, isGuest, setAuth } = useStore();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,7 +25,6 @@ export default function RegisterPage() {
     setLoading(true);
     setError('');
 
-    // Validate passwords match
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       setLoading(false);
@@ -36,15 +38,15 @@ export default function RegisterPage() {
     }
 
     try {
-      // ✅ Pass guestUserId if user is a guest
+      // Pass guestUserId if user is a guest to merge data
       const data = await register({ 
         name, 
         email, 
         password,
-        guestUserId: isGuest ? userId : undefined // ✅ Pass guest user ID for conversion
+        guestUserId: isGuest ? userId : undefined 
       });
 
-      // ✅ Store in Zustand (auto-saves to localStorage)
+      // Store in Zustand (auto-saves to localStorage)
       setAuth({
         token: data.token,
         userId: data.user._id,
@@ -53,144 +55,144 @@ export default function RegisterPage() {
       });
 
       console.log('✅ Registration successful:', data.user.name);
-
-      // ✅ Redirect to history page after registration
       router.push('/history');
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'Registration failed');
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md border-slate-200 shadow-xl">
+        <CardHeader className="text-center pb-8">
+          <div className="mx-auto w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-blue-200">
             <Printer className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">Printly</h1>
-          <p className="text-gray-600 mt-2">
-            {isGuest ? 'Complete your registration' : 'Create your account'}
-          </p>
-        </div>
+          <CardTitle className="text-2xl font-bold text-slate-900">
+            {isGuest ? 'Save Your History' : 'Create an Account'}
+          </CardTitle>
+          <CardDescription className="text-slate-600">
+            {isGuest 
+              ? 'Register to convert your guest account' 
+              : 'Join Printly to start printing efficiently'}
+          </CardDescription>
+        </CardHeader>
 
-        {/* Register Form */}
-        <div className="bg-white rounded-2xl shadow-xl p-8">
-          <form onSubmit={handleRegister} className="space-y-6">
+        <CardContent>
+          <form onSubmit={handleRegister} className="space-y-4">
             {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                <p className="text-sm text-red-600">{error}</p>
+              <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg p-3 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-600" />
+                {error}
               </div>
             )}
 
-            {/* ✅ Show info banner if converting guest */}
             {isGuest && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-blue-800">
-                  You're currently using a guest account. Register to save your print history permanently!
-                </p>
+              <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-sm text-blue-800">
+                👋 <strong>Note:</strong> We will link your current print history to your new account automatically.
               </div>
             )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Full Name
-              </label>
+            <div className="space-y-2">
+              <Label htmlFor="name">Full Name</Label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Input
+                  id="name"
                   type="text"
+                  placeholder="John Doe"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="John Doe"
+                  className="pl-10 h-11 bg-slate-50 border-slate-200 focus:bg-white transition-colors"
                   required
                 />
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email
-              </label>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email Address</Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Input
+                  id="email"
                   type="email"
+                  placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="you@example.com"
+                  className="pl-10 h-11 bg-slate-50 border-slate-200 focus:bg-white transition-colors"
                   required
                 />
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Password
-              </label>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Input
+                  id="password"
                   type="password"
+                  placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="••••••••"
+                  className="pl-10 h-11 bg-slate-50 border-slate-200 focus:bg-white transition-colors"
                   required
                   minLength={6}
                 />
               </div>
-              <p className="text-xs text-gray-500 mt-1">Must be at least 6 characters</p>
+              <p className="text-xs text-slate-500">Must be at least 6 characters</p>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Confirm Password
-              </label>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm Password</Label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Input
+                  id="confirmPassword"
                   type="password"
+                  placeholder="••••••••"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="••••••••"
+                  className="pl-10 h-11 bg-slate-50 border-slate-200 focus:bg-white transition-colors"
                   required
                 />
               </div>
             </div>
 
-            <button
-              type="submit"
+            <Button 
+              type="submit" 
+              className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-base font-semibold shadow-lg shadow-blue-100 mt-2"
               disabled={loading}
-              className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  {isGuest ? 'Converting account...' : 'Creating account...'}
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  {isGuest ? 'Converting...' : 'Creating account...'}
                 </>
               ) : (
-                isGuest ? 'Complete Registration' : 'Sign Up'
+                <>
+                  {isGuest ? 'Complete Registration' : 'Sign Up'} <ArrowRight className="w-4 h-4 ml-2" />
+                </>
               )}
-            </button>
+            </Button>
           </form>
+        </CardContent>
 
-          <div className="mt-6 text-center">
-            <button
+        <CardFooter className="flex flex-col gap-4 border-t border-slate-100 pt-6">
+          <div className="text-center text-sm text-slate-600">
+            Already have an account?{' '}
+            <Button 
+              variant="link" 
+              className="p-0 h-auto font-semibold text-blue-600 hover:text-blue-700"
               onClick={() => router.push('/login')}
-              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
             >
-              Already have an account? Sign in
-            </button>
+              Sign in
+            </Button>
           </div>
-        </div>
-      </div>
+        </CardFooter>
+      </Card>
     </div>
   );
 }

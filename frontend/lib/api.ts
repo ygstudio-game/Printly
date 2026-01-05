@@ -1,3 +1,4 @@
+import { DashboardResponse } from '@/types/admin';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null;
@@ -83,3 +84,11 @@ export const getJob = (jobId: string) =>
 export const getUserJobs = (userId: string) =>
   apiCall<any[]>(`/jobs/user/${userId}`);
 
+
+export async function getAdminAnalytics(startDate: string, endDate: string): Promise<DashboardResponse> {
+  const params = new URLSearchParams({ startDate, endDate });
+  const res = await fetch(`${API_URL}/admin/analytics?${params}`);
+  
+  if (!res.ok) throw new Error('Failed to fetch analytics');
+  return res.json();
+}

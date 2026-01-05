@@ -87,25 +87,31 @@ export class WindowsPrinterDetector {
       } else {
         console.log('🔄 Force refresh requested...');
       }
-
+      let capabilitiesMap;
       // Try batch query first
-      let capabilitiesMap = await this.batchQueryAllPrinters(electronPrinters.map(p => p.name));
+      //  capabilitiesMap = await this.batchQueryAllPrinters(electronPrinters.map(p => p.name));
       
       // Fallback to sequential if batch failed
-      if (Object.keys(capabilitiesMap).length === 0 && electronPrinters.length > 0) {
-        console.log('⚠️ Batch query failed, falling back to sequential queries...');
-        capabilitiesMap = await this.sequentialQueryPrinters(electronPrinters.map(p => p.name));
-      }
+      // if (Object.keys(capabilitiesMap).length === 0 && electronPrinters.length > 0) {
+      //   console.log('⚠️ Batch query failed, falling back to sequential queries...');
+      //   capabilitiesMap = await this.sequentialQueryPrinters(electronPrinters.map(p => p.name));
+      // }
 
       const windowsPrinters: WindowsPrinterCapabilities[] = [];
 
       for (const printer of electronPrinters) {
         try {
-          const capabilities = capabilitiesMap[printer.name] || {
+          let capabilities;
+              if(capabilitiesMap !== undefined){          
+           capabilities = capabilitiesMap![printer.name];
+        }else{
+           capabilities =  {
             color: this.detectColorFromName(printer.name),
             duplex: this.detectDuplexFromName(printer.name),
             paperSizes: ['A4', 'Letter']
           };
+
+        }
 
           const opts = printer.options as Record<string, any>;
 
@@ -114,15 +120,15 @@ export class WindowsPrinterDetector {
             printerName: printer.name,
             displayName: printer.displayName || printer.name,
             capabilities: {
-              supportsColor: capabilities.color,
-              supportsDuplex: capabilities.duplex,
-              paperSizes: capabilities.paperSizes,
-              maxPaperSize: capabilities.paperSizes[0] || 'A4',
+              supportsColor: capabilities!.color,
+              supportsDuplex: capabilities!.duplex,
+              paperSizes: capabilities!.paperSizes,
+              maxPaperSize: capabilities!.paperSizes[0] || 'A4',
               isDefault: printer.isDefault || false
             },
             pricing: {
-              bwPerPage: capabilities.color ? 5 : 3,
-              colorPerPage: capabilities.color ? 10 : null
+              bwPerPage: capabilities!.color ? 5 : 3,
+              colorPerPage: capabilities!.color ? 10 : null
             },
             systemInfo: {
               os: os.platform(),

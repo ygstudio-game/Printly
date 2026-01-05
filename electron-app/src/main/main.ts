@@ -10,18 +10,50 @@ import fs from 'fs';
 import os from 'os';
 import { execSync } from 'child_process';
 import { PrintJob } from '@/types';
+import { autoUpdater } from 'electron-updater'; 
 
 let mainWindow: BrowserWindow | null = null;
 let printManager: PrintManager;
 let localStore: LocalStore;
 let wsClient: WebSocketClient;
-let windowsPrinterDetector: WindowsPrinterDetector; // ✅ Correct variable name
+let windowsPrinterDetector: WindowsPrinterDetector;
+
+// --- Auto Updater Setup ---
+function setupAutoUpdater() {
+  autoUpdater.logger = console;
+  // Check for updates immediately on startup (production only)
+  if (app.isPackaged) {
+    autoUpdater.checkForUpdatesAndNotify();
+  }
+
+  // Poll for updates every hour
+  setInterval(() => {
+    if (app.isPackaged) autoUpdater.checkForUpdatesAndNotify();
+  }, 60 * 60 * 1000);
+}
+
+// Update Events
+autoUpdater.on('update-available', () => {
+  console.log('⬇️ Update available. Downloading...');
+});
+autoUpdater.on('update-downloaded', () => {
+  dialog.showMessageBox({
+    type: 'info',
+    title: 'Update Ready',
+    message: 'A new version of Printly has been downloaded. Restart now to apply?',
+    buttons: ['Restart', 'Later']
+  }).then((result) => {
+    if (result.response === 0) {
+      autoUpdater.quitAndInstall();
+    }
+  });
+});
 
 app.on('ready', () => {
   console.log(`🚀 Starting Printer App: ${config.printerId}`);
   
   createWindow();
-
+  setupAutoUpdater();
   // Initialize Modules
   localStore = new LocalStore();
   const removed = localStore.cleanupOldJobs(12); // Cleanup jobs older than 12 hours
@@ -53,9 +85,17 @@ function createWindow() {
     }
   });
 
-  const indexPath = path.join(__dirname, '../renderer/index.html');
-  console.log("📂 Loading UI from:", indexPath);
-  mainWindow.loadFile(indexPath);
+  if (!app.isPackaged) {
+     // Dev Mode: Load from Webpack Dev Server if running
+     // OR load local file if you prefer manual build
+     const indexPath = path.join(__dirname, '../renderer/index.html');
+     mainWindow.loadFile(indexPath);
+  } else {
+     // Prod Mode: Load from dist
+     const indexPath = path.join(__dirname, '../renderer/index.html'); // Adjust relative to dist/main/main.js
+     mainWindow.loadFile(indexPath);
+  }
+  console.log(" UI Loaded");
 
   mainWindow.once('ready-to-show', () => mainWindow?.show());
   if (mainWindow) {
@@ -168,7 +208,57 @@ ipcMain.handle('get-pending-jobs', async (_event, syncWithBackend: boolean = fal
   }
   return localStore.getPendingJobs();
 });
+// ✅ Handler for removing a single job
+ipcMain.handle('remove-job', async (_event, jobId: string) => {
+  try {
+    const token = localStore.get('token');
+    const backendHttp = config.backendUrl.replace('ws', 'http');
 
+    // 1. Call Backend API
+    await axios.delete(`${backendHttp}/api/jobs/${jobId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    // 2. Remove from Local Store
+    localStore.removeJob(jobId);
+    
+    console.log(`🗑️ Removed job ${jobId}`);
+    return { success: true };
+
+  } catch (error: any) {
+    console.error('❌ Failed to remove job:', error.message);
+    // If backend fails (e.g. 404), we might still want to remove locally? 
+    // For now, only remove locally if backend succeeds to keep sync.
+    return { success: false, error: error.message };
+  }
+});
+
+// ✅ Handler for removing ALL jobs
+ipcMain.handle('remove-all-jobs', async () => {
+  try {
+    const shopId = localStore.get('shopId');
+    const token = localStore.get('token');
+    
+    if (!shopId) throw new Error('No shop ID found');
+
+    const backendHttp = config.backendUrl.replace('ws', 'http');
+
+    // 1. Call Backend API
+    await axios.delete(`${backendHttp}/api/jobs/shop/${shopId}/all`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    // 2. Clear Local Store
+    localStore.clearJobs();
+
+    console.log(`🗑️ Removed all jobs for shop ${shopId}`);
+    return { success: true };
+
+  } catch (error: any) {
+    console.error('❌ Failed to remove all jobs:', error.message);
+    return { success: false, error: error.message };
+  }
+});
 ipcMain.handle('generate-print-preview', async (_event, settings: any, sourcePdfPath: string) => {
   try {
     // Create a hidden window for rendering
@@ -516,12 +606,59 @@ ipcMain.handle('check-registration', () => {
   return { isRegistered: !!isRegistered, shopId };
 });
 
-// Shop Info
-ipcMain.handle('get-shop-info', () => {
-  const shopName = localStore.get('shopName') || '';
-  const ownerName = localStore.get('ownerName') || '';
-  return { shopName, ownerName };
+
+//  : Fetch from Backend with Cache Fallback
+ipcMain.handle('get-shop-info', async () => {
+  // 1. Initialize with Cached Values (Fallback)
+  let shopName = localStore.get('shopName') || '';
+  let ownerName = localStore.get('ownerName') || '';
+  let pricing = localStore.get('pricing') || { 
+    bwPerPage: 5, 
+    colorPerPage: 10 
+  };
+
+  const shopId = localStore.get('shopId');
+  const token = localStore.get('token');
+
+  // 2. If online, try to fetch fresh data
+  if (shopId && token) {
+    try {
+      const backendHttp = config.backendUrl.replace('ws', 'http');
+      
+      const response = await axios.get(`${backendHttp}/api/shops/${shopId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.data) {
+        const shop = response.data;
+        console.log('✅ Fetched fresh shop info from backend');
+
+        // Update variables
+        shopName = shop.shopName || shopName;
+        ownerName = shop.ownerName || ownerName;
+        
+        // Update pricing if it exists in response
+        if (shop.pricing) {
+          pricing = {
+            bwPerPage: shop.pricing.bwPerPage ?? pricing.bwPerPage,
+            colorPerPage: shop.pricing.colorPerPage ?? pricing.colorPerPage
+          };
+        }
+        console.log('🏪 Updated Shop Info:', { shopName, ownerName, pricing });
+
+        // 3. Update Cache (so it's available next time offline)
+        localStore.set('shopName', shopName);
+        localStore.set('ownerName', ownerName);
+        localStore.set('pricing', pricing);
+      }
+    } catch (error: any) {
+      console.log('⚠️ Could not fetch fresh shop info (using cache):', error.message);
+    }
+  }
+    console.log('🏪 Returning Shop Info:', { shopName, ownerName, pricing });
+  return { shopName, ownerName, pricing };
 });
+
 ipcMain.handle('clear-printer-cache', () => {
   windowsPrinterDetector.clearCache();
   return { success: true };

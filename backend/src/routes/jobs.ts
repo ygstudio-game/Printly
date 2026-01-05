@@ -7,8 +7,15 @@ import { nanoid } from 'nanoid';
 import mongoose from 'mongoose';
 import Counter from '../models/Counter';
 import { authMiddleware,AuthRequest } from '../middleware/auth';
-
+import { log } from 'console';
+import { createClient } from '@supabase/supabase-js'; 
 const router = Router();
+// Initialize Supabase Client
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_ANON_KEY!
+);
+
 async function getNextSequence(name: string): Promise<number> {
   const counter = await Counter.findByIdAndUpdate(
     name,
@@ -172,6 +179,8 @@ router.get('/shop/:shopId', authMiddleware,async (req: AuthRequest, res: Respons
 
 // ✅ Update job status
 router.patch('/:id/status', authMiddleware, async (req: AuthRequest, res) => {
+  console.log('📥 Update job status payload:', JSON.stringify(req.body, null, 2 ));
+  
   try {
     const { status } = req.body;
     const jobId = req.params.id;
@@ -198,7 +207,7 @@ router.patch('/:id/status', authMiddleware, async (req: AuthRequest, res) => {
     }
 
     const updatedJob = await PrintJob.findByIdAndUpdate(jobId, update, { new: true });
-
+    console.log(`✅ Job ${jobId} status updated to ${status}`);
     res.json({ success: true, job: updatedJob });
   } catch (error: any) {
     console.error('Update status error:', error);
@@ -230,5 +239,101 @@ router.patch('/:id/cancel', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
+// ✅ DELETE Single Job
+router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = req.userId;
+    const userShopId = req.userShopId;
 
+    const job = await PrintJob.findById(id).populate('shopId');
+
+    if (!job) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    // Authorization Check
+    const jobShopId = (job.shopId as any).shopId || (job.shopId as any)._id.toString();
+    const jobUserId = job.userId.toString();
+
+    if (jobShopId !== userShopId && jobUserId !== userId) {
+      return res.status(403).json({ error: 'Forbidden: Not allowed to delete this job' });
+    }
+
+    // 1. Delete from Supabase Storage
+    if (job.fileKey) {
+      const { error: storageError } = await supabase.storage
+        .from('print-jobs')
+        .remove([job.fileKey]);
+      
+      if (storageError) {
+        console.error('⚠️ Failed to delete file from Supabase:', storageError);
+      } else {
+        console.log(`🗑️ Deleted file ${job.fileKey} from Supabase`);
+      }
+    }
+
+    // 2. Delete from Database
+    await PrintJob.findByIdAndDelete(id);
+    
+    console.log(`✅ Job ${id} completely removed from system`);
+    res.json({ success: true, message: 'Job deleted successfully' });
+
+  } catch (error: any) {
+    console.error('❌ Delete job error:', error);
+    res.status(500).json({ error: 'Failed to delete job' });
+  }
+});
+
+// ✅ DELETE All Pending Jobs for a Shop
+router.delete('/shop/:shopId/all', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { shopId } = req.params;
+    const userShopId = req.userShopId;
+
+    if (shopId !== userShopId) {
+      return res.status(403).json({ error: 'Forbidden: Access denied' });
+    }
+
+    const shop = await Shop.findOne({ shopId });
+    if (!shop) return res.status(404).json({ error: 'Shop not found' });
+
+    // Find all pending/printing jobs
+    const jobs = await PrintJob.find({ 
+      shopId: shop._id,
+      status: { $in: ['pending', 'printing'] }
+    });
+
+    if (jobs.length === 0) {
+      return res.json({ success: true, message: 'No jobs to delete' });
+    }
+
+    // 1. Collect file keys
+    const fileKeys = jobs.map(job => job.fileKey).filter(key => !!key);
+
+    // 2. Delete from Supabase Storage (Bulk)
+    if (fileKeys.length > 0) {
+      const { error: storageError } = await supabase.storage
+        .from('print-jobs')
+        .remove(fileKeys);
+
+      if (storageError) {
+        console.error('⚠️ Failed to delete files from Supabase:', storageError);
+      }
+    }
+
+    // 3. Delete from Database
+    await PrintJob.deleteMany({ 
+      shopId: shop._id,
+      status: { $in: ['pending', 'printing'] }
+    });
+
+    console.log(`✅ All pending jobs cleared for shop ${shopId}`);
+    res.json({ success: true, message: `Deleted ${jobs.length} jobs` });
+
+  } catch (error: any) {
+    console.error('❌ Delete all jobs error:', error);
+    res.status(500).json({ error: 'Failed to delete jobs' });
+  }
+});
 export default router;

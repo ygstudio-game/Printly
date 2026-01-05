@@ -39,14 +39,21 @@ sendPrintersToBackend: (printers: SystemPrinter[]) => Promise<{
         title: string;
         message: string;
       }) => Promise<void>;
-      
+      // delete Jobs
+            removeJob: (jobId: string) => Promise<{ success: boolean; error?: string }>;
+      removeAllJobs: () => Promise<{ success: boolean; error?: string }>;
+
       // Registration & Authentication
       registerPrinter: (data: any) => Promise<{ success: boolean; error?: string }>;
       checkRegistration: () => Promise<{ isRegistered: boolean; shopId?: string }>;
       
       // ✅ NEW: Shop Info & Logout
-      getShopInfo: () => Promise<{ shopName: string; ownerName: string }>;
-      loginPrinter: (loginData: { email: string; password: string }) => Promise<{ success: boolean; error?: string }>;
+     getShopInfo: () => Promise<{ 
+        shopName: string; 
+        ownerName: string; 
+        pricing?: { bwPerPage: number; colorPerPage: number } 
+      }>;
+            loginPrinter: (loginData: { email: string; password: string }) => Promise<{ success: boolean; error?: string }>;
       logout: () => Promise<{ success: boolean }>;
       
       // Generic invoke (fallback)

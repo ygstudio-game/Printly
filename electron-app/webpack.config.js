@@ -2,6 +2,7 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
+const Dotenv = require('dotenv-webpack');
 
 module.exports = {
   target: 'electron-renderer',
@@ -27,6 +28,11 @@ module.exports = {
     extensions: ['.tsx', '.ts', '.js', '.jsx']
   },
   plugins: [
+        new Dotenv({
+      path: './.env', // Path to your local .env file
+      safe: false,     // load .env.example (optional)
+      systemvars: true // allow reading from system env vars (for CI/CD)
+    }),
     new HtmlWebpackPlugin({
       template: './public/index.html'
     }),

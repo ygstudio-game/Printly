@@ -1,4 +1,3 @@
-// app/shop/[shopId]/settings/page.tsx
 'use client';
 
 import { useEffect, useState, use } from 'react';
@@ -7,7 +6,7 @@ import { useStore } from '@/lib/store';
 import { getShopPrinters, createJob } from '@/lib/api';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -19,12 +18,12 @@ import {
   Minus, 
   Plus, 
   FileText, 
-  Palette, 
   Copy, 
   Files,
-  RotateCw,
-  Printer as PrinterIcon,
-  IndianRupee
+  ChevronRight,
+  Receipt,
+  Check,
+  CreditCard
 } from 'lucide-react';
 import type { Printer } from '@/types/printer';
 
@@ -41,18 +40,27 @@ export default function SettingsPage({ params }: Props) {
   const [loading, setLoading] = useState(false);
   const [printer, setPrinter] = useState<Printer | null>(null);
 
+  // Params
   const fileKey = searchParams.get('fileKey');
   const fileName = searchParams.get('fileName');
   const printerId = searchParams.get('printerId');
   const totalPagesParam = searchParams.get('totalPages');
   const fileType = searchParams.get('fileType');
+  
+  // Pre-fill
+  const initialCopies = parseInt(searchParams.get('copies') || '1');
+  const initialColor = (searchParams.get('colorMode') as 'bw' | 'color') || 'bw';
+  const initialPaper = searchParams.get('paperSize') || 'A4';
+  const initialDuplex = searchParams.get('duplex') === 'true';
+  const initialOrientation = (searchParams.get('orientation') as 'portrait' | 'landscape') || 'portrait';
 
-  const [copies, setCopies] = useState(1);
-  const [colorMode, setColorMode] = useState<'bw' | 'color'>('bw');
-  const [paperSize, setPaperSize] = useState('A4');
-  const [duplex, setDuplex] = useState(false);
+  // State
+  const [copies, setCopies] = useState(initialCopies);
+  const [colorMode, setColorMode] = useState<'bw' | 'color'>(initialColor);
+  const [paperSize, setPaperSize] = useState(initialPaper);
+  const [duplex, setDuplex] = useState(initialDuplex);
   const [pageRanges, setPageRanges] = useState('');
-  const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
+  const [orientation, setOrientation] = useState<'portrait' | 'landscape'>(initialOrientation);
   const [totalPages] = useState(parseInt(totalPagesParam || '1'));
   const [cost, setCost] = useState(0);
 
@@ -75,13 +83,8 @@ export default function SettingsPage({ params }: Props) {
       
       if (selectedPrinter) {
         setPrinter(selectedPrinter);
-        
-        if (!selectedPrinter.capabilities.supportsColor) {
+        if (!selectedPrinter.capabilities.supportsColor && colorMode === 'color') {
           setColorMode('bw');
-        }
-        
-        if (selectedPrinter.capabilities.paperSizes.length > 0) {
-          setPaperSize(selectedPrinter.capabilities.paperSizes[0]);
         }
       } else {
         throw new Error('Printer not found');
@@ -123,19 +126,15 @@ export default function SettingsPage({ params }: Props) {
 
   function calculateCost() {
     if (!printer) return;
-    
     const pricePerPage = colorMode === 'color' 
       ? (printer.pricing?.colorPerPage || 10)
       : (printer.pricing?.bwPerPage || 5);
-    
     const pagesToPrint = parsePageRanges(pageRanges, totalPages).length;
-    const totalCost = pagesToPrint * copies * pricePerPage;
-    setCost(totalCost);
+    setCost(Math.round(pagesToPrint * copies * pricePerPage));
   }
 
   async function handleSubmit() {
     if (!printer) return;
-    
     setLoading(true);
     try {
       const jobData = {
@@ -157,11 +156,7 @@ export default function SettingsPage({ params }: Props) {
       };
 
       const { jobNumber } = await createJob(jobData);
-
-      toast.success('Job submitted!', {
-        description: `Your job number is ${jobNumber}`,
-      });
-      
+      toast.success('Job submitted!', { description: `Your job number is ${jobNumber}` });
       router.push(`/jobs/${jobNumber}`);
     } catch (error) {
       toast.error('Failed to submit job');
@@ -172,361 +167,246 @@ export default function SettingsPage({ params }: Props) {
 
   if (!printer) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="animate-spin h-12 w-12 text-blue-600 mx-auto mb-4" />
-          <p className="text-slate-600">Loading printer settings...</p>
-        </div>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
       </div>
     );
   }
 
   const pagesToPrint = parsePageRanges(pageRanges, totalPages).length;
+  const pricePerPage = colorMode === 'color' ? printer.pricing.colorPerPage : printer.pricing.bwPerPage;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-      {/* Header */}
-      <header className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-4 max-w-4xl">
-          <Button variant="ghost" onClick={() => router.back()} className="mb-2">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
-          </Button>
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-blue-100 rounded-xl">
-              <FileText className="w-6 h-6 text-blue-600" />
-            </div>
-            <div className="flex-1">
-              <h1 className="text-xl font-bold text-slate-900">Configure Print Settings</h1>
-              <p className="text-sm text-slate-600">{fileName}</p>
-            </div>
-          </div>
+    <div className="min-h-screen bg-slate-50 pb-40"> 
+      
+      {/* Mobile Header */}
+      <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-40 px-4 py-3 flex items-center shadow-sm">
+        <Button variant="ghost" size="icon" onClick={() => router.back()} className="-ml-2 text-slate-500 rounded-full hover:bg-slate-100">
+          <ArrowLeft className="w-6 h-6" />
+        </Button>
+        <div className="ml-2 flex-1">
+           <h1 className="font-bold text-slate-900 leading-tight">Review Settings</h1>
+           <p className="text-xs text-slate-500 truncate">{fileName}</p>
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Settings Panel */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* File Info Card */}
-            <Card className="border-slate-200 shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-blue-600" />
-                  Document Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-3 gap-4 text-sm">
-                  <div className="bg-slate-50 rounded-lg p-3">
-                    <p className="text-slate-600 text-xs mb-1">Total Pages</p>
-                    <p className="font-bold text-slate-900 text-lg">{totalPages}</p>
-                  </div>
-                  <div className="bg-slate-50 rounded-lg p-3">
-                    <p className="text-slate-600 text-xs mb-1">File Type</p>
-                    <p className="font-bold text-slate-900 text-lg">{fileType?.toUpperCase()}</p>
-                  </div>
-                  <div className="bg-slate-50 rounded-lg p-3">
-                    <p className="text-slate-600 text-xs mb-1">Printer</p>
-                    <p className="font-semibold text-slate-900 text-sm truncate">{printer.displayName}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+      <div className="max-w-3xl mx-auto p-4 space-y-6">
+        
+        {/* Document Info */}
+        <Card className="border-0 shadow-sm ring-1 ring-slate-100 bg-white">
+           <div className="p-4 flex items-center gap-4">
+              <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 shrink-0">
+                 <FileText size={24} />
+              </div>
+              <div>
+                 <h3 className="font-bold text-slate-900 text-sm line-clamp-1">{fileName}</h3>
+                 <p className="text-xs text-slate-500 mt-0.5">
+                    {totalPages} Pages • {fileType?.toUpperCase()} • {printer.displayName}
+                 </p>
+              </div>
+           </div>
+        </Card>
 
-            {/* Number of Copies */}
-            <Card className="border-slate-200 shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Copy className="w-5 h-5 text-blue-600" />
-                  Number of Copies
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <Label className="text-base text-slate-700">Copies to print</Label>
-                  <div className="flex items-center gap-3">
-                    <Button 
-                      variant="outline" 
-                      size="icon"
-                      className="h-10 w-10"
-                      onClick={() => setCopies(c => Math.max(1, c - 1))}
-                    >
-                      <Minus className="h-4 w-4" />
-                    </Button>
-                    <div className="w-20">
-                      <Input 
-                        type="number" 
-                        value={copies} 
-                        onChange={(e) => setCopies(Math.max(1, parseInt(e.target.value) || 1))}
-                        className="text-center text-lg font-semibold"
-                      />
-                    </div>
-                    <Button 
-                      variant="outline" 
-                      size="icon"
-                      className="h-10 w-10"
-                      onClick={() => setCopies(c => Math.min(99, c + 1))}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+        {/* Copies */}
+        <Card className="border-0 shadow-sm ring-1 ring-slate-100 bg-white overflow-hidden">
+           <div className="p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                 <div className="bg-blue-50 p-2 rounded-xl text-blue-600"><Copy size={20} /></div>
+                 <Label className="font-bold text-slate-700">Copies</Label>
+              </div>
+              <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200">
+                 <button onClick={() => setCopies(c => Math.max(1, c - 1))} className="w-10 h-10 flex items-center justify-center bg-white rounded-lg shadow-sm border border-slate-100 active:scale-95 transition-transform">
+                    <Minus size={16} />
+                 </button>
+                 <span className="w-10 text-center font-bold text-lg text-slate-900">{copies}</span>
+                 <button onClick={() => setCopies(c => Math.min(99, c + 1))} className="w-10 h-10 flex items-center justify-center bg-white rounded-lg shadow-sm border border-slate-100 active:scale-95 transition-transform">
+                    <Plus size={16} />
+                 </button>
+              </div>
+           </div>
+        </Card>
 
-            {/* Color Mode */}
-            {printer.capabilities.supportsColor && (
-              <Card className="border-slate-200 shadow-sm">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Palette className="w-5 h-5 text-blue-600" />
-                    Color Mode
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <RadioGroup 
-                    value={colorMode}
-                    onValueChange={(value: 'bw' | 'color') => setColorMode(value)}
-                    className="grid grid-cols-2 gap-4"
-                  >
-                    <div className="relative">
-                      <RadioGroupItem value="bw" id="bw" className="peer sr-only" />
-                      <Label 
-                        htmlFor="bw"
-                        className="flex flex-col items-center justify-center rounded-xl border-2 border-slate-200 bg-white p-4 hover:bg-slate-50 peer-data-[state=checked]:border-blue-600 peer-data-[state=checked]:bg-blue-50 cursor-pointer transition-all"
-                      >
-                        <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-2">
-                          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-slate-800 to-slate-600" />
-                        </div>
-                        <span className="font-semibold text-slate-900">Black & White</span>
-                        <span className="text-sm text-slate-600 mt-1">₹{printer.pricing.bwPerPage}/page</span>
-                      </Label>
-                    </div>
-                    <div className="relative">
-                      <RadioGroupItem value="color" id="color" className="peer sr-only" />
-                      <Label 
-                        htmlFor="color"
-                        className="flex flex-col items-center justify-center rounded-xl border-2 border-slate-200 bg-white p-4 hover:bg-slate-50 peer-data-[state=checked]:border-blue-600 peer-data-[state=checked]:bg-blue-50 cursor-pointer transition-all"
-                      >
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-red-400 via-yellow-400 to-blue-400 flex items-center justify-center mb-2" />
-                        <span className="font-semibold text-slate-900">Color</span>
-                        <span className="text-sm text-slate-600 mt-1">₹{printer.pricing.colorPerPage}/page</span>
-                      </Label>
-                    </div>
-                  </RadioGroup>
-                </CardContent>
-              </Card>
-            )}
+        {/* Color Mode */}
+        {printer.capabilities.supportsColor && (
+           <div className="space-y-2">
+              <Label className="px-1 text-sm font-semibold text-slate-500 uppercase tracking-wider">Color Mode</Label>
+              <RadioGroup value={colorMode} onValueChange={(v: any) => setColorMode(v)} className="grid grid-cols-2 gap-3">
+                 <Label 
+                    htmlFor="bw" 
+                    className={`relative flex flex-col items-center p-4 rounded-2xl border-2 transition-all cursor-pointer ${
+                       colorMode === 'bw' 
+                       ? 'border-slate-800 bg-slate-50 shadow-md' 
+                       : 'border-white bg-white shadow-sm'
+                    }`}
+                 >
+                    <RadioGroupItem value="bw" id="bw" className="sr-only" />
+                    <div className="w-10 h-10 rounded-full bg-slate-800 mb-2 shadow-sm" />
+                    <span className="font-bold text-slate-900">Black & White</span>
+                    <span className="text-xs text-slate-500 font-medium bg-white px-2 py-0.5 rounded-full mt-1 border border-slate-100">
+                       ₹{printer.pricing.bwPerPage}/pg
+                    </span>
+                 </Label>
 
-            {/* Page Layout */}
-            <Card className="border-slate-200 shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Files className="w-5 h-5 text-blue-600" />
-                  Page Layout
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Paper Size */}
-                <div>
-                  <Label htmlFor="paper-size" className="text-base text-slate-700 mb-2 block">Paper Size</Label>
-                  <Select value={paperSize} onValueChange={setPaperSize}>
-                    <SelectTrigger id="paper-size" className="h-11">
-                      <SelectValue placeholder="Select paper size" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {printer.capabilities.paperSizes.map(size => (
-                        <SelectItem key={size} value={size}>{size}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                 <Label 
+                    htmlFor="color" 
+                    className={`relative flex flex-col items-center p-4 rounded-2xl border-2 transition-all cursor-pointer ${
+                       colorMode === 'color' 
+                       ? 'border-blue-500 bg-blue-50 shadow-md' 
+                       : 'border-white bg-white shadow-sm'
+                    }`}
+                 >
+                    <RadioGroupItem value="color" id="color" className="sr-only" />
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-500 via-orange-400 to-blue-500 mb-2 shadow-sm" />
+                    <span className="font-bold text-slate-900">Color</span>
+                    <span className="text-xs text-slate-500 font-medium bg-white px-2 py-0.5 rounded-full mt-1 border border-slate-100">
+                       ₹{printer.pricing.colorPerPage}/pg
+                    </span>
+                 </Label>
+              </RadioGroup>
+           </div>
+        )}
 
-                {/* Orientation */}
-                <div>
-                  <Label className="text-base text-slate-700 mb-3 block">Orientation</Label>
-                  <RadioGroup 
-                    value={orientation}
-                    onValueChange={(value: 'portrait' | 'landscape') => setOrientation(value)}
-                    className="grid grid-cols-2 gap-4"
-                  >
-                    <div className="relative">
-                      <RadioGroupItem value="portrait" id="portrait" className="peer sr-only" />
-                      <Label 
-                        htmlFor="portrait"
-                        className="flex flex-col items-center justify-center rounded-xl border-2 border-slate-200 bg-white p-4 hover:bg-slate-50 peer-data-[state=checked]:border-blue-600 peer-data-[state=checked]:bg-blue-50 cursor-pointer transition-all"
-                      >
-                        <div className="w-12 h-16 border-2 border-slate-400 rounded mb-2" />
-                        <span className="font-medium text-slate-900">Portrait</span>
-                      </Label>
-                    </div>
-                    <div className="relative">
-                      <RadioGroupItem value="landscape" id="landscape" className="peer sr-only" />
-                      <Label 
-                        htmlFor="landscape"
-                        className="flex flex-col items-center justify-center rounded-xl border-2 border-slate-200 bg-white p-4 hover:bg-slate-50 peer-data-[state=checked]:border-blue-600 peer-data-[state=checked]:bg-blue-50 cursor-pointer transition-all"
-                      >
-                        <div className="w-16 h-12 border-2 border-slate-400 rounded mb-2 flex items-center justify-center">
-                          <RotateCw className="w-4 h-4 text-slate-400" />
-                        </div>
-                        <span className="font-medium text-slate-900">Landscape</span>
-                      </Label>
-                    </div>
-                  </RadioGroup>
-                </div>
+        {/* Advanced Settings */}
+        <div className="space-y-2">
+           <Label className="px-1 text-sm font-semibold text-slate-500 uppercase tracking-wider">Layout Options</Label>
+           <Card className="border-0 shadow-sm ring-1 ring-slate-100 bg-white p-4 space-y-5 rounded-2xl">
+              
+              {/* Paper & Orientation */}
+              <div className="grid grid-cols-2 gap-4">
+                 <div>
+                    <Label className="text-xs font-bold text-slate-400 uppercase mb-1.5 block">Paper Size</Label>
+                    <Select value={paperSize} onValueChange={setPaperSize}>
+                       <SelectTrigger className="bg-slate-50 border-slate-200"><SelectValue /></SelectTrigger>
+                       <SelectContent>
+                          {printer?.capabilities.paperSizes.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                       </SelectContent>
+                    </Select>
+                 </div>
+                 <div>
+                    <Label className="text-xs font-bold text-slate-400 uppercase mb-1.5 block">Orientation</Label>
+                    <Select value={orientation} onValueChange={(v: any) => setOrientation(v)}>
+                       <SelectTrigger className="bg-slate-50 border-slate-200"><SelectValue /></SelectTrigger>
+                       <SelectContent>
+                          <SelectItem value="portrait">Portrait</SelectItem>
+                          <SelectItem value="landscape">Landscape</SelectItem>
+                       </SelectContent>
+                    </Select>
+                 </div>
+              </div>
 
-                {/* Duplex */}
-                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
-                  <div className="flex-1">
-                    <Label htmlFor="duplex" className="text-base text-slate-900 font-medium">
-                      Double-sided printing
-                    </Label>
-                    <p className="text-sm text-slate-600 mt-0.5">
-                      {printer.capabilities.supportsDuplex ? 'Save paper by printing on both sides' : 'Not supported by this printer'}
-                    </p>
-                  </div>
-                  <Switch 
-                    id="duplex"
-                    checked={duplex}
+              <div className="h-px bg-slate-100 w-full" />
+
+              {/* Duplex */}
+              <div className="flex items-center justify-between">
+                 <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-xl transition-colors ${duplex ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>
+                       <Files size={20} />
+                    </div>
+                    <div>
+                       <span className="font-bold text-slate-700 block">Double-Sided</span>
+                       <span className="text-xs text-slate-400 font-medium">
+                          {printer.capabilities.supportsDuplex ? 'Print on both sides' : 'Not supported'}
+                       </span>
+                    </div>
+                 </div>
+                 <Switch 
+                    checked={duplex} 
                     onCheckedChange={setDuplex}
                     disabled={!printer.capabilities.supportsDuplex}
-                  />
-                </div>
-              </CardContent>
-            </Card>
+                    className="data-[state=checked]:bg-green-500 scale-110"
+                 />
+              </div>
 
-            {/* Page Range */}
-            <Card className="border-slate-200 shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Files className="w-5 h-5 text-blue-600" />
-                  Page Selection
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <Label htmlFor="page-ranges" className="text-base text-slate-700 mb-2 block">
-                    Custom Page Range (Optional)
-                  </Label>
-                  <Input 
-                    id="page-ranges" 
-                    placeholder={`e.g., 1-5, 8, 10-${totalPages}`}
-                    value={pageRanges}
-                    className="h-11"
-                    onChange={(e) => setPageRanges(e.target.value)}
-                  />
-                  <p className="text-sm text-slate-500 mt-2 flex items-start gap-2">
-                    <span>💡</span>
-                    <span>Leave blank to print all {totalPages} pages. Use commas and hyphens (e.g., 1-3,5,7-9)</span>
-                  </p>
-                </div>
+              <div className="h-px bg-slate-100 w-full" />
 
-                {/* Pages indicator */}
-                {pageRanges && (
-                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <p className="text-sm text-blue-900">
-                      <strong>{pagesToPrint}</strong> page{pagesToPrint !== 1 ? 's' : ''} will be printed
+              {/* Page Selection */}
+              <div>
+                 <Label className="text-xs font-bold text-slate-400 uppercase mb-2 block">Page Range</Label>
+                 <Input 
+                    value={pageRanges} 
+                    onChange={(e) => setPageRanges(e.target.value)} 
+                    placeholder={`e.g. 1-5, 8 (Default: All ${totalPages} pages)`}
+                    className="bg-slate-50 border-slate-200"
+                 />
+                 <div className="mt-2 flex items-center justify-between">
+                    <p className="text-xs text-slate-500">
+                       Leave blank for all pages
                     </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Summary Panel */}
-          <div className="lg:col-span-1">
-            <Card className="border-slate-200 shadow-lg sticky top-24">
-              <CardHeader className="bg-gradient-to-br from-blue-50 to-indigo-50 border-b border-slate-200">
-                <CardTitle className="flex items-center gap-2 text-slate-900">
-                  <PrinterIcon className="w-5 h-5 text-blue-600" />
-                  Print Summary
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-6 space-y-4">
-                {/* Summary Items */}
-                <div className="space-y-3 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Pages to print:</span>
-                    <span className="font-semibold text-slate-900">{pagesToPrint}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Copies:</span>
-                    <span className="font-semibold text-slate-900">{copies}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Color mode:</span>
-                    <span className="font-semibold text-slate-900">{colorMode === 'color' ? 'Color' : 'B&W'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Orientation:</span>
-                    <span className="font-semibold text-slate-900 capitalize">{orientation}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Paper size:</span>
-                    <span className="font-semibold text-slate-900">{paperSize}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Duplex:</span>
-                    <span className="font-semibold text-slate-900">{duplex ? 'Yes' : 'No'}</span>
-                  </div>
-                </div>
-
-                <div className="border-t border-slate-200 pt-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-slate-600">Price per page:</span>
-                    <span className="font-medium text-slate-900">
-                      ₹{colorMode === 'color' ? printer.pricing.colorPerPage : printer.pricing.bwPerPage}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center mb-4">
-                    <span className="text-slate-600">Total sheets:</span>
-                    <span className="font-medium text-slate-900">{pagesToPrint * copies}</span>
-                  </div>
-                  
-                  {/* Total Cost */}
-                  <div className="bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl p-4 text-white">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-blue-100 text-sm mb-1">Total Cost</p>
-                        <div className="flex items-center gap-1">
-                          <IndianRupee className="w-6 h-6" />
-                          <span className="text-3xl font-bold">{cost.toFixed(2)}</span>
-                        </div>
-                      </div>
-                      <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                        <PrinterIcon className="w-6 h-6" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <Button 
-                  size="lg" 
-                  className="w-full h-12 text-base font-semibold"
-                  disabled={loading || pagesToPrint === 0}
-                  onClick={handleSubmit}
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                      Submitting...
-                    </>
-                  ) : (
-                    <>
-                      <PrinterIcon className="mr-2 h-5 w-5" />
-                      Submit Print Job
-                    </>
-                  )}
-                </Button>
-
-                <p className="text-xs text-center text-slate-500">
-                  Your document will be ready for pickup shortly after submission
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+                    {pageRanges && (
+                       <span className="text-xs font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                          Selected: {pagesToPrint} pages
+                       </span>
+                    )}
+                 </div>
+              </div>
+           </Card>
         </div>
+
+        {/* Complete Order Summary */}
+        <div className="space-y-2 pt-4">
+            <Label className="px-1 text-sm font-semibold text-slate-500 uppercase tracking-wider">Order Summary</Label>
+            <Card className="border-0 shadow-sm ring-1 ring-slate-200 bg-white p-5 rounded-2xl relative overflow-hidden">
+                {/* Background Decoration */}
+                <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-bl-full -z-0 opacity-50" />
+                
+                <div className="space-y-3 relative z-10">
+                    <div className="flex justify-between items-center text-sm border-b border-dashed border-slate-200 pb-3">
+                        <span className="text-slate-600">Pages x Copies</span>
+                        <span className="font-semibold text-slate-900">{pagesToPrint} x {copies}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm border-b border-dashed border-slate-200 pb-3">
+                        <span className="text-slate-600">Cost per page ({colorMode === 'color' ? 'Color' : 'B&W'})</span>
+                        <span className="font-semibold text-slate-900">₹{pricePerPage}</span>
+                    </div>
+                    
+                    {/* Settings Snapshot */}
+                    <div className="flex flex-wrap gap-2 pt-1 pb-2">
+                        <span className="inline-flex items-center px-2 py-1 rounded-md bg-slate-50 border border-slate-100 text-xs text-slate-600">
+                           {paperSize}
+                        </span>
+                        <span className="inline-flex items-center px-2 py-1 rounded-md bg-slate-50 border border-slate-100 text-xs text-slate-600 capitalize">
+                           {orientation}
+                        </span>
+                        {duplex && (
+                           <span className="inline-flex items-center px-2 py-1 rounded-md bg-green-50 border border-green-100 text-xs text-green-700 gap-1">
+                              <Check size={10} /> Double-sided
+                           </span>
+                        )}
+                    </div>
+
+                    <div className="flex justify-between items-center pt-2">
+                        <span className="font-bold text-slate-900 text-lg">Total Payable</span>
+                        <span className="font-bold text-2xl text-blue-600">₹{cost}</span>
+                    </div>
+                </div>
+            </Card>
+        </div>
+
+      </div>
+
+      {/* Fixed Bottom Action Bar */}
+      <div className="fixed bottom-0 left-0 w-full bg-white/90 backdrop-blur-lg border-t border-slate-200 p-4 pb-safe z-50 shadow-[0_-5px_20px_-5px_rgba(0,0,0,0.1)]">
+         <div className="max-w-3xl mx-auto flex items-center justify-between gap-4">
+            <div className="flex flex-col">
+               <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500">Total</span>
+               <span className="text-2xl font-black text-slate-900 leading-none">₹{cost}</span>
+            </div>
+            <Button 
+               onClick={handleSubmit} 
+               disabled={loading || pagesToPrint === 0}
+               className="bg-slate-900 hover:bg-slate-800 text-white rounded-2xl h-14 px-8 shadow-lg shadow-slate-300 active:scale-95 transition-all font-bold text-base flex-1 max-w-[240px]"
+            >
+               {loading ? (
+                  <Loader2 className="animate-spin" />
+               ) : (
+                  <div className="flex items-center gap-2">
+                     <CreditCard size={18} />
+                     <span>Pay & Print</span>
+                     <ChevronRight size={18} className="opacity-80" />
+                  </div>
+               )}
+            </Button>
+         </div>
       </div>
     </div>
   );

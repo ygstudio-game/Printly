@@ -6,7 +6,7 @@ import { Html5Qrcode } from 'html5-qrcode';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Camera, Store, MapPin, Loader2 } from 'lucide-react';
+import { ArrowLeft, Camera, Store, MapPin, Loader2, QrCode, Search, ChevronLeft } from 'lucide-react';
 import { apiCall } from '@/lib/api';
 
 interface Shop {
@@ -23,64 +23,69 @@ interface Shop {
 export default function ScanPage() {
   const router = useRouter();
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const readerDivRef = useRef<HTMLDivElement>(null); // Ref for the div element
   const [scanning, setScanning] = useState(false);
   const [manualCode, setManualCode] = useState('');
   const [shops, setShops] = useState<Shop[]>([]);
   const [loadingShops, setLoadingShops] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const isMounted = useRef(false);
 
-  // ✅ Load saved input and shops on mount
+  // Load initial data
   useEffect(() => {
-    // Restore saved input
+    isMounted.current = true;
     const saved = localStorage.getItem('lastShopSearch');
-    if (saved) {
-      setManualCode(saved);
-    }
+    if (saved) setManualCode(saved);
 
-    // Load shops
     loadShops();
-
-    // Start scanner
-    startScanning();
+    
+    // Delay startScanning slightly to ensure DOM is ready
+    const timer = setTimeout(() => {
+      startScanning();
+    }, 100);
 
     return () => {
-      stopScanning();
+      isMounted.current = false;
+      clearTimeout(timer);
+      stopScanning(); // Cleanup on unmount
     };
   }, []);
 
-  // ✅ Save input to localStorage
   useEffect(() => {
-    if (manualCode) {
-      localStorage.setItem('lastShopSearch', manualCode);
-    }
+    if (manualCode) localStorage.setItem('lastShopSearch', manualCode);
   }, [manualCode]);
 
-  // ✅ Load available shops
   async function loadShops() {
     try {
       const data = await apiCall<Shop[]>('/shops');
-      setShops(data.filter(s => s.status === 'active'));
+      if (isMounted.current) {
+        setShops(data.filter(s => s.status === 'active'));
+      }
     } catch (error) {
       console.error('Failed to load shops:', error);
     } finally {
-      setLoadingShops(false);
+      if (isMounted.current) setLoadingShops(false);
     }
   }
 
-  // ✅ Fixed scanner with proper cleanup
+  // ✅ ROBUST SCANNER INITIALIZATION
   async function startScanning() {
-    // Prevent duplicate scanners
-    if (scannerRef.current || scanning) {
-      console.log('Scanner already running');
-      return;
+    // 1. Check if element exists
+    if (!readerDivRef.current) return;
+    
+    // 2. Prevent duplicate instances if ref exists
+    if (scannerRef.current) {
+      // If already scanning, do nothing. If stopped, maybe clear and restart?
+      // For safety, let's just return to avoid "double camera"
+      return; 
     }
 
     try {
-      const scanner = new Html5Qrcode('reader');
-      scannerRef.current = scanner;
+      const html5QrCode = new Html5Qrcode("reader"); // Use string ID matching the div
+      scannerRef.current = html5QrCode;
 
-      await scanner.start(
-        { facingMode: 'environment' },
+      await html5QrCode.start(
+        { facingMode: "environment" },
         {
           fps: 10,
           qrbox: { width: 250, height: 250 },
@@ -91,31 +96,34 @@ export default function ScanPage() {
         },
         undefined
       );
-
-      setScanning(true);
+      
+      if (isMounted.current) setScanning(true);
       console.log('✅ Scanner started');
-    } catch (err: any) {
-      console.error('Scanner error:', err);
-      // Fallback to manual entry if camera fails
-      setScanning(false);
+    } catch (err) {
+      console.warn('Scanner start error (might be permission or duplicate):', err);
+      // Clean up ref if start failed so we can try again potentially
+      scannerRef.current = null;
+      if (isMounted.current) setScanning(false);
     }
   }
 
-  // ✅ Proper cleanup
+  // ✅ ROBUST CLEANUP
   async function stopScanning() {
     const scanner = scannerRef.current;
     if (!scanner) return;
 
     try {
-  if (scanner.isScanning) {
+      if (scanner.isScanning) {
         await scanner.stop();
         console.log('✅ Scanner stopped');
       }
+      // Also clear the scanner so new instance can be created later
+      scanner.clear(); 
     } catch (e) {
       console.warn("Stop error:", e);
     } finally {
       scannerRef.current = null;
-      setScanning(false);
+      if (isMounted.current) setScanning(false);
     }
   }
 
@@ -123,137 +131,165 @@ export default function ScanPage() {
     console.log('📷 Scanned:', qrData);
     stopScanning();
     
-    // Extract shopId from URL
+    // Extract shopId from URL (handles full URLs or just ID)
+    // Matches: /shop/xyz or just xyz (if user generated simple QR)
+    let shopId = qrData;
     const match = qrData.match(/\/shop\/([^\/\?]+)/);
     if (match) {
-      const shopId = match[1];
+      shopId = match[1];
+    }
+
+    if (shopId) {
       router.push(`/shop/${shopId}`);
     } else {
-      alert('Invalid QR code. Please scan a shop QR code.');
-      startScanning();
+      alert('Invalid QR code format. Please scan a valid shop QR.');
+      // Restart scanning after alert closes
+      setTimeout(startScanning, 500);
     }
   }
 
   function handleManualSubmit() {
     const code = manualCode.trim();
-    if (code) {
-      router.push(`/shop/${code}`);
-    }
+    if (code) router.push(`/shop/${code}`);
   }
 
-  function navigateToShop(shopId: string) {
-    router.push(`/shop/${shopId}`);
-  }
-
-  // ✅ Filter shops by search
   const filteredShops = shops.filter(shop =>
     shop.shopName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     shop.location.city.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4">
-      <div className="max-w-md mx-auto">
-        <Button
-          variant="ghost"
-          onClick={() => router.back()}
-          className="mb-4"
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
-        </Button>
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-20 md:pb-8">
+      {/* Header */}
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm">
+        <div className="max-w-md mx-auto px-4 py-3 md:py-4">
+          <div className="flex items-center gap-3">
+             <Button 
+               variant="ghost" 
+               size="icon" 
+               onClick={() => router.back()} 
+               className="-ml-2 text-slate-500 hover:bg-slate-100 rounded-full"
+             >
+               <ChevronLeft className="w-6 h-6" />
+             </Button>
+             <div>
+                <h1 className="text-lg font-bold text-slate-900">Scan QR Code</h1>
+             </div>
+          </div>
+        </div>
+      </header>
 
+      <div className="max-w-md mx-auto p-4 space-y-6">
+        
         {/* Scanner Card */}
-        <Card className="mb-6">
-          <CardContent className="pt-6">
-            <div className="text-center mb-4">
-              <Camera className="h-12 w-12 mx-auto mb-2 text-blue-600" />
-              <h1 className="text-2xl font-bold">Scan Shop QR Code</h1>
-              <p className="text-slate-600 mt-2">
-                Position the QR code within the frame
+        <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+           <div className="p-6 pb-0 text-center">
+              <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600">
+                 <QrCode size={32} />
+              </div>
+              <h2 className="text-xl font-bold text-slate-900 mb-2">Find a Shop</h2>
+              <p className="text-sm text-slate-500 mb-6">
+                Point your camera at the shop's QR code to start printing instantly.
               </p>
-            </div>
+           </div>
 
-            {/* Scanner */}
-            <div 
-              id="reader" 
-              className="rounded-lg overflow-hidden border-2 border-blue-200 mb-4"
-            />
-
-            {scanning && (
-              <div className="p-4 bg-blue-50 rounded-lg text-center">
-                <p className="text-sm text-blue-800">
-                  💡 Hold your phone steady and ensure good lighting
-                </p>
-              </div>
-            )}
-
-            {/* Manual Entry */}
-            <div className="mt-6">
-              <div className="text-center text-sm text-slate-600 mb-3">
-                Or enter shop code manually
-              </div>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="e.g., ram-xerox-pune"
-                  value={manualCode}
-                  onChange={(e) => setManualCode(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleManualSubmit()}
-                />
-                <Button onClick={handleManualSubmit} disabled={!manualCode.trim()}>
-                  Go
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Available Shops */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Store className="h-5 w-5" />
-              Available Shops
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {/* Search */}
-            <Input
-              placeholder="Search shops..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="mb-4"
-            />
-
-            {/* Shop List */}
-            {loadingShops ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
-              </div>
-            ) : filteredShops.length === 0 ? (
-              <div className="text-center py-8 text-slate-500">
-                <Store className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p>No shops found</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {filteredShops.map((shop) => (
-                  <div
-                    key={shop._id}
-                    onClick={() => navigateToShop(shop.shopId)}
-                    className="p-4 border rounded-lg hover:bg-slate-50 cursor-pointer transition-colors"
-                  >
-                    <h3 className="font-semibold text-lg">{shop.shopName}</h3>
-                    <div className="flex items-center gap-1 text-sm text-slate-600 mt-1">
-                      <MapPin className="h-4 w-4" />
-                      <span>{shop.location.address}, {shop.location.city}</span>
-                    </div>
+           {/* Camera Viewport */}
+           <div className="relative px-4 pb-4">
+              <div 
+                id="reader" 
+                ref={readerDivRef}
+                className="rounded-2xl overflow-hidden bg-slate-900 aspect-square w-full shadow-inner relative z-10"
+              />
+              
+              {/* Overlay for better UX when scanning */}
+              {scanning && (
+                <div className="absolute top-4 left-4 right-4 bottom-4 pointer-events-none z-20 flex items-center justify-center">
+                  <div className="w-64 h-64 border-2 border-white/50 rounded-2xl relative">
+                     <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-blue-500 rounded-tl-xl -mt-1 -ml-1"></div>
+                     <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-blue-500 rounded-tr-xl -mt-1 -mr-1"></div>
+                     <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-blue-500 rounded-bl-xl -mb-1 -ml-1"></div>
+                     <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-blue-500 rounded-br-xl -mb-1 -mr-1"></div>
                   </div>
-                ))}
+                </div>
+              )}
+           </div>
+
+           {/* Manual Entry */}
+           <div className="px-6 py-6 bg-slate-50 border-t border-slate-100">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">
+                 Or enter code manually
+              </label>
+              <div className="flex gap-2">
+                 <Input
+                   placeholder="e.g. print-shop-01"
+                   value={manualCode}
+                   onChange={(e) => setManualCode(e.target.value)}
+                   onKeyPress={(e) => e.key === 'Enter' && handleManualSubmit()}
+                   className="bg-white border-slate-200 focus:border-blue-500"
+                 />
+                 <Button onClick={handleManualSubmit} disabled={!manualCode.trim()} className="bg-slate-900 text-white hover:bg-slate-800">
+                   Go
+                 </Button>
               </div>
-            )}
-          </CardContent>
-        </Card>
+           </div>
+        </div>
+
+        {/* Nearby Shops List */}
+        <div className="space-y-4">
+           <div className="flex items-center justify-between px-2">
+              <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                 <Store size={18} className="text-blue-600" />
+                 Nearby Shops
+              </h3>
+              {loadingShops && <Loader2 size={16} className="animate-spin text-slate-400" />}
+           </div>
+
+           <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input 
+                 type="text" 
+                 placeholder="Search by name or city..." 
+                 value={searchQuery}
+                 onChange={(e) => setSearchQuery(e.target.value)}
+                 className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+              />
+           </div>
+
+           {loadingShops ? (
+              <div className="text-center py-10">
+                 <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm mx-auto mb-3">
+                    <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                 </div>
+                 <p className="text-sm text-slate-500">Locating print shops...</p>
+              </div>
+           ) : filteredShops.length > 0 ? (
+              <div className="grid gap-3">
+                 {filteredShops.map((shop) => (
+                    <div
+                       key={shop._id}
+                       onClick={() => router.push(`/shop/${shop.shopId}`)}
+                       className="group bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all cursor-pointer flex items-center justify-between"
+                    >
+                       <div>
+                          <h4 className="font-bold text-slate-900">{shop.shopName}</h4>
+                          <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
+                             <MapPin size={12} className="text-slate-400" />
+                             {shop.location.city}
+                          </div>
+                       </div>
+                       <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                          <ChevronLeft size={16} className="rotate-180" />
+                       </div>
+                    </div>
+                 ))}
+              </div>
+           ) : (
+              <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-slate-200">
+                 <Store size={32} className="mx-auto mb-2 text-slate-300" />
+                 <p className="text-sm text-slate-500">No shops found matching "{searchQuery}"</p>
+              </div>
+           )}
+        </div>
       </div>
     </div>
   );

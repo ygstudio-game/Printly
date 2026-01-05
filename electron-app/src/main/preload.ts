@@ -9,13 +9,13 @@ contextBridge.exposeInMainWorld("electron", {
   },
   loginPrinter: (loginData: any) =>
     ipcRenderer.invoke("login-printer", loginData),
-  getShopInfo: () => ipcRenderer.invoke("get-shop-info"),
+  getShopInfo: () => ipcRenderer.invoke("get-shop-info"),  
   logout: () => ipcRenderer.invoke("logout"),
   checkRegistration: () => ipcRenderer.invoke("check-registration"),
   syncJobsFromBackend: (): Promise<{ success: boolean; jobs: any[] }> =>
-    ipcRenderer.invoke('sync-jobs-from-backend'),
+    ipcRenderer.invoke("sync-jobs-from-backend"),
   getPendingJobs: (syncWithBackend?: boolean): Promise<any[]> =>
-    ipcRenderer.invoke('get-pending-jobs', syncWithBackend),
+    ipcRenderer.invoke("get-pending-jobs", syncWithBackend),
   generatePrintPreview: (
     settings: any,
     sourcePdfPath: string
@@ -32,8 +32,8 @@ contextBridge.exposeInMainWorld("electron", {
   showErrorDialog: (options: any) =>
     ipcRenderer.invoke("show-error-dialog", options),
   cancelJob: (jobId: string) => ipcRenderer.invoke("cancel-job", jobId),
-    getHistoryFromBackend: () => ipcRenderer.invoke('get-history-from-backend'),
-previewJob: (job: any) => ipcRenderer.invoke("preview-job", job),
+  getHistoryFromBackend: () => ipcRenderer.invoke("get-history-from-backend"),
+  previewJob: (job: any) => ipcRenderer.invoke("preview-job", job),
   registerPrinter: (data: any) => ipcRenderer.invoke("register-printer", data),
   getAllPrinters: (forceRefresh?: boolean) =>
     ipcRenderer.invoke("get-all-printers", forceRefresh),
@@ -45,4 +45,8 @@ previewJob: (job: any) => ipcRenderer.invoke("preview-job", job),
     ipcRenderer.invoke("download-job-file", job),
   savePrinterEdits: (printerId: string, capabilities: any) =>
     ipcRenderer.invoke("save-printer-edits", printerId, capabilities),
+
+  removeJob: (jobId: string) => ipcRenderer.invoke('remove-job', jobId),
+  removeAllJobs: () => ipcRenderer.invoke('remove-all-jobs'),
+
 });

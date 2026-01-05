@@ -10,8 +10,8 @@ import { config } from './config';
 import { PrintJob, PrintResult } from '../types';
 
 const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_ANON_KEY!
+  config.supabase.url,     // Read from config object
+  config.supabase.anonKey  // Read from config object
 );
 
 export class PrintManager {
@@ -342,8 +342,11 @@ private async notifyBackend(jobId: string, status: 'printing' | 'cancelled' | 'c
       },
       body: JSON.stringify({ status })
     });
+    console.log(`✅ Notified backend: Job ${jobId} status updated to ${status}`);
+
   } catch (error) {
     // Silent fail for notifications
+    console.error('Backend notification error:', error);
   }
 }
 

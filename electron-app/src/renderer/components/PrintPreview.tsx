@@ -32,12 +32,20 @@ export default function PrintPreview({ pdfPath, job, onPrint, onCancel }: PrintP
   const [estimatedCost, setEstimatedCost] = useState(0);
   const [isConverting, setIsConverting] = useState(false);
   const [iframeKey, setIframeKey] = useState(0);
-  const [pdfBlobUrl, setPdfBlobUrl] = useState<string>('');
-  // Load available printers
+
+  // ✅ State for shop pricing
+  const [shopPricing, setShopPricing] = useState({
+    bwPerPage: 5,   // Default fallback
+    colorPerPage: 10 // Default fallback
+  });
+
+  // Load available printers and shop info
   useEffect(() => {
     loadPrinters();
+    loadShopInfo(); // ✅ Fetch shop details
     convertToPdfIfNeeded();
   }, []);
+
   async function loadPrinters() {
     try {
       const printers = await window.electron.getAllPrinters();
@@ -56,87 +64,78 @@ export default function PrintPreview({ pdfPath, job, onPrint, onCancel }: PrintP
       console.error('Failed to load printers:', error);
     }
   }
-  //old  convertion setup
-//   async function convertToPdfIfNeeded() {
-//     const fileExt = pdfPath.split('.').pop()?.toLowerCase();
-    
-//     if (fileExt === 'pdf') {
-//       setConvertedPdfPath(pdfPath);
-//       return;
-//     }
 
-//     try {
-//       setIsConverting(true);
-      
-//       let fileType = 'pdf';
-//       if (['docx', 'doc'].includes(fileExt || '')) {
-//         fileType = 'docx';
-//       } else if (['jpg', 'jpeg', 'png'].includes(fileExt || '')) {
-//         fileType = 'image';
-//       }
+  // ✅ Fetch shop info to get accurate pricing
+  async function loadShopInfo() {
+    try {
+      // Prioritize pricing passed directly in the job object if available
+      if (job.shopPricing) {
+        setShopPricing({
+          bwPerPage: job.shopPricing.bwPerPage || 5,
+          colorPerPage: job.shopPricing.colorPerPage || 10
+        });
+        return;
+      }
 
-//       const convertedPath = await window.electron.convertToPdf(pdfPath, fileType);
-//       setConvertedPdfPath(convertedPath);
-//       setIframeKey(prev => prev + 1);
-      
-//       console.log('✅ File converted to PDF:', convertedPath);
-//     } catch (error) {
-//       console.error('Failed to convert file:', error);
-//      } finally {
-//       setIsConverting(false);
-//     }
-//   }
-  // Calculate cost
+      // Otherwise, try to fetch from backend/local store
+      const shopInfo = await window.electron.getShopInfo();
+      if (shopInfo && shopInfo.pricing) {
+         setShopPricing({
+            bwPerPage: shopInfo.pricing.bwPerPage || 5,
+            colorPerPage: shopInfo.pricing.colorPerPage || 10
+         });
+      }
+    } catch (error) {
+      console.warn('Could not load shop pricing, using defaults:', error);
+    }
+  }
   
   async function convertToPdfIfNeeded() {
-  const fileExt = pdfPath.split('.').pop()?.toLowerCase();
-  
-  if (fileExt === 'pdf') {
-    setConvertedPdfPath(pdfPath);
-    setIsConverting(false);
-    return;
-  }
-
-  try {
-    setIsConverting(true);
-    console.log('Converting file:', pdfPath, 'Type:', fileExt);
+    const fileExt = pdfPath.split('.').pop()?.toLowerCase();
     
-    let fileType = 'pdf';
-    if (['docx', 'doc'].includes(fileExt || '')) {
-      fileType = 'docx';
-    } else if (['jpg', 'jpeg', 'png'].includes(fileExt || '')) {
-      fileType = 'image';
+    if (fileExt === 'pdf') {
+      setConvertedPdfPath(pdfPath);
+      setIsConverting(false);
+      return;
     }
 
-    console.log('Calling convertToPdf with:', { pdfPath, fileType });
-    
-    const convertedPath = await window.electron.convertToPdf(pdfPath, fileType);
-    
-    console.log('✅ Conversion successful:', convertedPath);
-    setConvertedPdfPath(convertedPath);
-    setIframeKey(prev => prev + 1);
-  } catch (error) {
-    console.error('Failed to convert file:', error);
-    // Fallback: Try to display original file
-    setConvertedPdfPath(pdfPath);
-    // Could also show a toast error here
-  } finally {
-    setIsConverting(false);
+    try {
+      setIsConverting(true);
+      console.log('Converting file:', pdfPath, 'Type:', fileExt);
+      
+      let fileType = 'pdf';
+      if (['docx', 'doc'].includes(fileExt || '')) {
+        fileType = 'docx';
+      } else if (['jpg', 'jpeg', 'png'].includes(fileExt || '')) {
+        fileType = 'image';
+      }
+
+      console.log('Calling convertToPdf with:', { pdfPath, fileType });
+      
+      const convertedPath = await window.electron.convertToPdf(pdfPath, fileType);
+      
+      console.log('✅ Conversion successful:', convertedPath);
+      setConvertedPdfPath(convertedPath);
+      setIframeKey(prev => prev + 1);
+    } catch (error) {
+      console.error('Failed to convert file:', error);
+      // Fallback: Try to display original file
+      setConvertedPdfPath(pdfPath);
+    } finally {
+      setIsConverting(false);
+    }
   }
-}
-const pricePerPageBWP =  job?.shopPricing?.bwPerPage || 5;
-const pricePerPageColor =  job?.shopPricing?.colorPerPage || 10;
-useEffect(() => {
-  const pricePerPage = settings.colorMode === 'color' ? pricePerPageColor : pricePerPageBWP;
-  const effectivePages = Math.ceil(totalPages / settings.pagesPerSheet);
-  const cost = effectivePages * settings.copies * pricePerPage;
-  setEstimatedCost(cost);
-}, [settings, totalPages, pricePerPageBWP, pricePerPageColor]);
+
+  // ✅ Use Shop Pricing for Calculation
+  useEffect(() => {
+    const pricePerPage = settings.colorMode === 'color' ? shopPricing.colorPerPage : shopPricing.bwPerPage;
+    const effectivePages = Math.ceil(totalPages / settings.pagesPerSheet);
+    const cost = effectivePages * settings.copies * pricePerPage;
+    setEstimatedCost(Math.round(cost));
+  }, [settings, totalPages, shopPricing]); // specific dependencies
 
   const updateSetting = (key: string, value: any) => {
     setSettings(prev => ({ ...prev, [key]: value }));
-    console.log(`Setting updated: ${key} = ${value}`);
-    console.log('Current settings:', { ...settings, [key]: value });
   };
 
   const handlePrint = async () => {
@@ -270,7 +269,7 @@ useEffect(() => {
           </button>
           <div className="h-8 w-px bg-gray-300" />
           <h1 className="font-semibold text-lg">{job.fileName}</h1>
-                {/* ✅ Show converting status */}
+              {/* ✅ Show converting status */}
           {isConverting && (
             <div className="flex items-center gap-2 text-sm text-blue-600">
               <RefreshCw size={16} className="animate-spin" />
@@ -415,7 +414,7 @@ useEffect(() => {
                     onChange={() => updateSetting('colorMode', 'color')}
                     className="w-4 h-4"
                   />
-                  <span className="text-sm">Color (₹10/page)</span>
+                  <span className="text-sm">Color (₹{shopPricing.colorPerPage}/page)</span>
                 </label>
                 <label className="flex items-center gap-2 p-3 border border-gray-300 rounded cursor-pointer hover:bg-gray-50">
                   <input
@@ -425,7 +424,7 @@ useEffect(() => {
                     onChange={() => updateSetting('colorMode', 'bw')}
                     className="w-4 h-4"
                   />
-                  <span className="text-sm">Black and white (₹5/page)</span>
+                  <span className="text-sm">Black and white (₹{shopPricing.bwPerPage}/page)</span>
                 </label>
               </div>
             </div>
@@ -639,12 +638,7 @@ useEffect(() => {
                 filter: settings.colorMode === 'bw' ? 'grayscale(100%)' : 'none'
               }}
             >
-              {/* <embed
-                src={`file://${pdfPath}#page=${currentPage}&view=FitH`}
-                type="application/pdf"
-                className="w-[210mm] h-[297mm]"
-              /> */}
-                          {/* ✅ Use converted PDF path */}
+                {/* ✅ Use converted PDF path */}
                 <iframe
                   key={iframeKey}
                   src={`file://${convertedPdfPath}#page=${currentPage}`}

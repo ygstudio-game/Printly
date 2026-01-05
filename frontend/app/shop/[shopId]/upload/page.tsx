@@ -1,29 +1,19 @@
-// app/shop/[shopId]/upload/page.tsx
 'use client';
 
 import { useState, useCallback, use, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useDropzone, FileRejection, Accept } from 'react-dropzone';
+import { useDropzone, FileRejection } from 'react-dropzone';
 import { extractFileInfo } from '@/lib/fileInfo';
 import { getShopPrinters } from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
-  Loader2, 
-  Upload, 
-  CheckCircle,
-  Palette,
-  Copy,
-  Files,
-  RotateCw,
-  Minus,
-  Plus,
-  ArrowLeft
+  Loader2, Upload, CheckCircle, Copy, Files, 
+  ArrowLeft, FileText, Smartphone, ChevronRight, X 
 } from 'lucide-react';
 import type { Printer } from '@/types/printer';
 
@@ -31,19 +21,10 @@ interface UploadPageProps {
   params: Promise<{ shopId: string }>;
 }
 
-interface UploadUrlResponse {
-  uploadUrl: string;
-  fileKey: string;
-  fileName: string;
-}
-
 interface FileInfo {
   totalPages: number;
   fileType: string;
-  dimensions?: {
-    width: number;
-    height: number;
-  };
+  dimensions?: { width: number; height: number };
 }
 
 export default function UploadPage({ params }: UploadPageProps) {
@@ -52,7 +33,7 @@ export default function UploadPage({ params }: UploadPageProps) {
   const printerId = searchParams.get('printerId');
   const { shopId } = use(params);
   
-  // Upload states
+  // State
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -62,61 +43,49 @@ export default function UploadPage({ params }: UploadPageProps) {
   const [uploadComplete, setUploadComplete] = useState(false);
   const [fileKey, setFileKey] = useState<string>('');
   
-  // Printer info
+  // Settings
   const [printer, setPrinter] = useState<Printer | null>(null);
-  const [loadingPrinter, setLoadingPrinter] = useState(true);
-  
-  // Print settings (user can configure while uploading)
   const [copies, setCopies] = useState(1);
   const [colorMode, setColorMode] = useState<'bw' | 'color'>('bw');
   const [paperSize, setPaperSize] = useState('A4');
   const [duplex, setDuplex] = useState(false);
-  const [pageRanges, setPageRanges] = useState('');
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
+  const [estimatedCost, setEstimatedCost] = useState(0);
 
-  // Load printer details on mount
+  // Load Printer
   useEffect(() => {
-    if (printerId) {
-      loadPrinterDetails();
-    }
+    if (printerId) loadPrinterDetails();
   }, [printerId]);
+
+  // Calculate Cost
+  useEffect(() => {
+    if (!printer) return;
+    const pages = fileInfo?.totalPages || 1; 
+    const rate = colorMode === 'color' ? printer.pricing.colorPerPage : printer.pricing.bwPerPage;
+    setEstimatedCost(Math.round(rate! * pages * copies));
+  }, [printer, fileInfo, colorMode, copies]);
 
   async function loadPrinterDetails() {
     try {
       const printers = await getShopPrinters(shopId);
       const selectedPrinter = printers.find(p => p._id === printerId);
-      
       if (selectedPrinter) {
         setPrinter(selectedPrinter);
-        
-        if (!selectedPrinter.capabilities.supportsColor) {
-          setColorMode('bw');
-        }
-        
+        if (!selectedPrinter.capabilities.supportsColor) setColorMode('bw');
         if (selectedPrinter.capabilities.paperSizes.length > 0) {
           setPaperSize(selectedPrinter.capabilities.paperSizes[0]);
         }
       }
     } catch (error) {
       console.error('Failed to load printer:', error);
-    } finally {
-      setLoadingPrinter(false);
     }
   }
 
   const onDrop = useCallback(async (acceptedFiles: File[], rejectedFiles: FileRejection[]) => {
     if (rejectedFiles.length > 0) {
-      const rejection = rejectedFiles[0];
-      if (rejection.errors[0].code === 'file-too-large') {
-        setError('File is too large. Maximum size is 50MB.');
-      } else if (rejection.errors[0].code === 'file-invalid-type') {
-        setError('Invalid file type. Please upload PDF, DOCX, JPG, or PNG.');
-      } else {
-        setError(rejection.errors[0].message);
-      }
+      setError('Invalid file. Max 50MB. PDF, DOCX, JPG, PNG only.');
       return;
     }
-
     if (acceptedFiles.length === 0) return;
 
     const file = acceptedFiles[0];
@@ -125,14 +94,13 @@ export default function UploadPage({ params }: UploadPageProps) {
     setUploadComplete(false);
     
     try {
-      // ✅ Step 1: Extract file info (in parallel with upload preparation)
+      // 1. Analyze
       setExtractingInfo(true);
       const info = await extractFileInfo(file);
       setFileInfo(info);
       setExtractingInfo(false);
-      console.log('📄 File Info:', info);
 
-      // ✅ Step 2: Start upload
+      // 2. Upload
       setUploading(true);
       setUploadProgress(10);
       
@@ -143,437 +111,325 @@ export default function UploadPage({ params }: UploadPageProps) {
           fileName: file.name,
           fileSize: file.size,
           mimeType: file.type,
-          shopId: shopId,
-          printerId: printerId
+          shopId,
+          printerId
         })
       });
       
-      if (!response.ok) throw new Error('Failed to get upload URL');
-      
-      const data: UploadUrlResponse = await response.json();
+      if (!response.ok) throw new Error('Failed to init upload');
+      const data = await response.json();
       setFileKey(data.fileKey);
-      setUploadProgress(30);
       
-      const uploadResponse = await fetch(data.uploadUrl, {
+      setUploadProgress(40);
+      
+      const uploadRes = await fetch(data.uploadUrl, {
         method: 'PUT',
         body: file,
         headers: { 'Content-Type': file.type },
       });
       
-      if (!uploadResponse.ok) throw new Error('Failed to upload file');
+      if (!uploadRes.ok) throw new Error('Upload failed');
       
+      // Force complete state
       setUploadProgress(100);
-      setUploadComplete(true);
+      setTimeout(() => {
+        setUploading(false);
+        setUploadComplete(true);
+      }, 600); 
       
-      console.log('✅ Upload complete! User can now submit settings.');
-      
-    } catch (err) {
-      console.error('Upload error:', err);
-      setError(err instanceof Error ? err.message : 'Upload failed');
+    } catch (err: any) {
+      setError(err.message || 'Upload failed');
       setUploading(false);
-      setUploadProgress(0);
       setExtractingInfo(false);
     }
   }, [shopId, printerId]);
 
-  function handleProceedToCheckout() {
+  function handleProceed() {
     if (!fileInfo || !fileKey || !uploadedFile) return;
 
     const queryParams = new URLSearchParams({
       printerId: printerId || '',
-      fileKey: fileKey,
+      fileKey,
       fileName: uploadedFile.name,
       totalPages: fileInfo.totalPages.toString(),
       fileType: fileInfo.fileType,
-      // ✅ Pass pre-configured settings
       copies: copies.toString(),
       colorMode,
       paperSize,
       duplex: duplex.toString(),
-      pageRanges,
-      orientation
+      orientation,
+      estimatedCost: estimatedCost.toString()
     });
-
-    if (fileInfo.dimensions) {
-      queryParams.append('width', fileInfo.dimensions.width.toString());
-      queryParams.append('height', fileInfo.dimensions.height.toString());
-    }
 
     router.push(`/shop/${shopId}/settings?${queryParams.toString()}`);
   }
 
-  const acceptedFileTypes: Accept = {
-    'application/pdf': ['.pdf'],
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
-    'image/jpeg': ['.jpg', '.jpeg'],
-    'image/png': ['.png']
-  };
-
   const { getRootProps, getInputProps, isDragActive } = useDropzone({ 
     onDrop,
-    accept: acceptedFileTypes,
+    accept: { 'application/pdf': ['.pdf'], 'image/*': ['.jpg','.png','.jpeg'] },
     maxSize: 50 * 1024 * 1024,
     maxFiles: 1,
-    disabled: uploading || extractingInfo || uploadComplete
+    disabled: uploading || extractingInfo
   });
 
-  if (!printerId) {
-    router.push(`/shop/${shopId}`);
-    return null;
-  }
+  if (!printerId) return null;
 
-  const showSettings = (uploading || uploadComplete) && fileInfo && printer;
-  const canProceed = uploadComplete && fileInfo;
+  // Show settings if uploading OR complete
+  const showSettings = (uploading || uploadComplete) && printer;
+  // Show bottom bar as soon as a file is dropped
+  const showBottomBar = !!uploadedFile && !!printer;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-      <header className="bg-white border-b border-slate-200 shadow-sm">
-        <div className="container mx-auto px-4 py-4 max-w-6xl">
-          <Button variant="ghost" onClick={() => router.back()}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
-          </Button>
+    <div className="min-h-screen bg-slate-50 pb-32">
+      {/* Mobile Header */}
+      <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-40 px-4 py-3 flex items-center shadow-sm">
+        <Button variant="ghost" size="icon" onClick={() => router.back()} className="-ml-2 text-slate-500 rounded-full hover:bg-slate-100">
+          <ArrowLeft className="w-6 h-6" />
+        </Button>
+        <div className="ml-2 flex-1">
+           <h1 className="font-bold text-slate-900 leading-tight">Upload Document</h1>
+           {printer && <p className="text-xs text-slate-500 truncate">{printer.displayName}</p>}
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
-        <div className="grid lg:grid-cols-2 gap-6">
-          {/* Left: Upload Area */}
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900 mb-2">Upload Document</h1>
-            <p className="text-slate-600 mb-6">
-              Upload your file and configure print settings
-            </p>
+      <div className="max-w-3xl mx-auto p-4 space-y-6">
+        
+        {/* Upload Zone */}
+        <div 
+          {...getRootProps()} 
+          className={`
+            relative overflow-hidden rounded-3xl transition-all duration-300 min-h-[220px] flex flex-col items-center justify-center bg-white shadow-sm border-2
+            ${isDragActive ? 'border-blue-500 bg-blue-50 ring-4 ring-blue-100' : 'border-dashed border-slate-200'}
+            ${uploadComplete ? 'border-solid border-green-500 bg-green-50/20' : ''}
+          `}
+        >
+          <input {...getInputProps()} />
 
-            <Card className="border-slate-200 shadow-lg">
-              <CardContent className="pt-6">
-                <div
-                  {...getRootProps()}
-                  className={`
-                    border-2 border-dashed rounded-xl p-12 text-center cursor-pointer
-                    transition-all duration-200
-                    ${isDragActive ? 'border-blue-500 bg-blue-50' : 'border-slate-300 hover:border-slate-400'}
-                    ${uploading || extractingInfo || uploadComplete ? 'opacity-50 cursor-not-allowed' : ''}
-                  `}
-                >
-                  <input {...getInputProps()} />
-                  
-                  {extractingInfo ? (
-                    <div>
-                      <Loader2 className="animate-spin h-16 w-16 mx-auto mb-4 text-blue-600" />
-                      <p className="text-lg font-medium text-slate-900">Analyzing document...</p>
-                      <p className="text-sm text-slate-600 mt-1">Extracting page count and details</p>
-                    </div>
-                  ) : uploading ? (
-                    <div>
-                      <Loader2 className="animate-spin h-16 w-16 mx-auto mb-4 text-blue-600" />
-                      <p className="text-lg font-medium text-slate-900 mb-3">Uploading...</p>
-                      <div className="w-full bg-slate-200 rounded-full h-3 mb-2">
-                        <div 
-                          className="bg-gradient-to-r from-blue-600 to-indigo-600 h-3 rounded-full transition-all duration-300"
-                          style={{ width: `${uploadProgress}%` }}
-                        />
-                      </div>
-                      <p className="text-sm text-slate-600">{uploadProgress}%</p>
-                      {fileInfo && (
-                        <p className="text-sm text-blue-600 mt-3">
-                          💡 Configure print settings on the right while we upload
-                        </p>
-                      )}
-                    </div>
-                  ) : uploadComplete ? (
-                    <div>
-                      <div className="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
-                        <CheckCircle className="h-10 w-10 text-green-600" />
-                      </div>
-                      <p className="text-lg font-semibold text-slate-900">Upload Complete!</p>
-                      <p className="text-sm text-slate-600 mt-2">{uploadedFile?.name}</p>
-                      {fileInfo && (
-                        <div className="mt-4 inline-block bg-slate-100 rounded-lg px-4 py-2">
-                          <p className="text-sm text-slate-700">
-                            📄 {fileInfo.totalPages} pages • {fileInfo.fileType.toUpperCase()}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div>
-                      <Upload className="h-16 w-16 mx-auto mb-4 text-slate-400" />
-                      {isDragActive ? (
-                        <p className="text-lg font-medium text-blue-600">Drop file here...</p>
-                      ) : (
-                        <>
-                          <p className="text-lg font-medium text-slate-900 mb-2">
-                            Drop file here or click to browse
-                          </p>
-                          <p className="text-sm text-slate-600 mb-1">PDF, DOCX, JPG, PNG</p>
-                          <p className="text-sm text-slate-500">Maximum size: 50MB</p>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {error && (
-                  <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-                    <p className="text-red-800 text-sm">{error}</p>
-                  </div>
-                )}
-
-                {!uploadComplete && !uploading && !extractingInfo && (
-                  <div className="mt-6 grid grid-cols-2 gap-3">
-                    <Button
-                      variant="outline"
-                      onClick={() => document.getElementById('file-input')?.click()}
-                      className="w-full"
-                    >
-                      📂 Browse Files
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => alert('Camera feature coming soon!')}
-                      className="w-full"
-                    >
-                      📷 Take Photo
-                    </Button>
-                  </div>
-                )}
-
-                <input
-                  id="file-input"
-                  type="file"
-                  accept=".pdf,.docx,.jpg,.jpeg,.png"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files.length > 0) {
-                      onDrop([e.target.files[0]], []);
-                    }
-                  }}
-                  className="hidden"
-                />
-              </CardContent>
-            </Card>
-
-            {/* Tips */}
-            <Card className="mt-6 border-blue-200 bg-blue-50">
-              <CardContent className="pt-6">
-                <h3 className="font-semibold text-blue-900 mb-3 flex items-center gap-2">
-                  💡 Quick Tips
-                </h3>
-                <ul className="text-sm text-blue-800 space-y-2">
-                  <li className="flex items-start gap-2">
-                    <span>•</span>
-                    <span>Configure settings while your file uploads</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span>•</span>
-                    <span>PDF format provides best print quality</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span>•</span>
-                    <span>Files are automatically deleted after printing</span>
-                  </li>
-                </ul>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Right: Settings Panel (shown during/after upload) */}
-          <div>
-            {showSettings ? (
-              <div className="space-y-6">
-                <div>
-                  <h2 className="text-2xl font-bold text-slate-900 mb-2">Print Settings</h2>
-                  <p className="text-slate-600">
-                    {uploadComplete ? 'Review and adjust your settings' : 'Configure while we upload'}
-                  </p>
-                </div>
-
-                {/* Copies */}
-                <Card className="border-slate-200 shadow-sm">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Copy className="w-5 h-5 text-blue-600" />
-                      Copies
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center justify-between">
-                      <Label className="text-base">Number of copies</Label>
-                      <div className="flex items-center gap-3">
-                        <Button 
-                          variant="outline" 
-                          size="icon"
-                          onClick={() => setCopies(c => Math.max(1, c - 1))}
-                        >
-                          <Minus className="h-4 w-4" />
-                        </Button>
-                        <Input 
-                          type="number" 
-                          value={copies} 
-                          onChange={(e) => setCopies(Math.max(1, parseInt(e.target.value) || 1))}
-                          className="w-16 text-center font-semibold"
-                        />
-                        <Button 
-                          variant="outline" 
-                          size="icon"
-                          onClick={() => setCopies(c => c + 1)}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Color Mode */}
-                {printer.capabilities.supportsColor && (
-                  <Card className="border-slate-200 shadow-sm">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <Palette className="w-5 h-5 text-blue-600" />
-                        Color Mode
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <RadioGroup 
-                        value={colorMode}
-                        onValueChange={(value: 'bw' | 'color') => setColorMode(value)}
-                        className="grid grid-cols-2 gap-4"
-                      >
-                        <div className="relative">
-                          <RadioGroupItem value="bw" id="bw-upload" className="peer sr-only" />
-                          <Label 
-                            htmlFor="bw-upload"
-                            className="flex flex-col items-center justify-center rounded-xl border-2 border-slate-200 bg-white p-4 hover:bg-slate-50 peer-data-[state=checked]:border-blue-600 peer-data-[state=checked]:bg-blue-50 cursor-pointer transition-all"
-                          >
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-800 to-slate-600 mb-2" />
-                            <span className="font-medium">B&W</span>
-                            <span className="text-xs text-slate-600">₹{printer.pricing.bwPerPage}/page</span>
-                          </Label>
-                        </div>
-                        <div className="relative">
-                          <RadioGroupItem value="color" id="color-upload" className="peer sr-only" />
-                          <Label 
-                            htmlFor="color-upload"
-                            className="flex flex-col items-center justify-center rounded-xl border-2 border-slate-200 bg-white p-4 hover:bg-slate-50 peer-data-[state=checked]:border-blue-600 peer-data-[state=checked]:bg-blue-50 cursor-pointer transition-all"
-                          >
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-400 via-yellow-400 to-blue-400 mb-2" />
-                            <span className="font-medium">Color</span>
-                            <span className="text-xs text-slate-600">₹{printer.pricing.colorPerPage}/page</span>
-                          </Label>
-                        </div>
-                      </RadioGroup>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Orientation */}
-                <Card className="border-slate-200 shadow-sm">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <RotateCw className="w-5 h-5 text-blue-600" />
-                      Orientation
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <RadioGroup 
-                      value={orientation}
-                      onValueChange={(value: 'portrait' | 'landscape') => setOrientation(value)}
-                      className="grid grid-cols-2 gap-4"
-                    >
-                      <div className="relative">
-                        <RadioGroupItem value="portrait" id="portrait-upload" className="peer sr-only" />
-                        <Label 
-                          htmlFor="portrait-upload"
-                          className="flex flex-col items-center justify-center rounded-xl border-2 border-slate-200 bg-white p-4 hover:bg-slate-50 peer-data-[state=checked]:border-blue-600 peer-data-[state=checked]:bg-blue-50 cursor-pointer transition-all"
-                        >
-                          <div className="w-10 h-14 border-2 border-slate-400 rounded mb-2" />
-                          <span className="font-medium">Portrait</span>
-                        </Label>
-                      </div>
-                      <div className="relative">
-                        <RadioGroupItem value="landscape" id="landscape-upload" className="peer sr-only" />
-                        <Label 
-                          htmlFor="landscape-upload"
-                          className="flex flex-col items-center justify-center rounded-xl border-2 border-slate-200 bg-white p-4 hover:bg-slate-50 peer-data-[state=checked]:border-blue-600 peer-data-[state=checked]:bg-blue-50 cursor-pointer transition-all"
-                        >
-                          <div className="w-14 h-10 border-2 border-slate-400 rounded mb-2" />
-                          <span className="font-medium">Landscape</span>
-                        </Label>
-                      </div>
-                    </RadioGroup>
-                  </CardContent>
-                </Card>
-
-                {/* Paper & Duplex */}
-                <Card className="border-slate-200 shadow-sm">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Files className="w-5 h-5 text-blue-600" />
-                      Paper Options
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div>
-                      <Label className="text-sm mb-2 block">Paper Size</Label>
-                      <Select value={paperSize} onValueChange={setPaperSize}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {printer.capabilities.paperSizes.map(size => (
-                            <SelectItem key={size} value={size}>{size}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                      <Label htmlFor="duplex-upload" className="text-sm">
-                        Double-sided
-                      </Label>
-                      <Switch 
-                        id="duplex-upload"
-                        checked={duplex}
-                        onCheckedChange={setDuplex}
-                        disabled={!printer.capabilities.supportsDuplex}
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Proceed Button */}
-                {canProceed && (
-                  <Button 
-                    size="lg" 
-                    className="w-full h-12 text-base font-semibold"
-                    onClick={handleProceedToCheckout}
-                  >
-                    <CheckCircle className="mr-2 h-5 w-5" />
-                    Review & Submit
-                  </Button>
-                )}
+          {extractingInfo ? (
+            <div className="animate-in fade-in zoom-in duration-300 text-center">
+              <div className="bg-blue-50 p-4 rounded-full inline-block mb-4">
+                 <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
               </div>
-            ) : (
-              <Card className="border-slate-200 shadow-sm h-full flex items-center justify-center p-12">
-                <div className="text-center">
-                  {loadingPrinter ? (
-                    <>
-                      <Loader2 className="animate-spin h-12 w-12 text-blue-600 mx-auto mb-4" />
-                      <p className="text-slate-600">Loading printer settings...</p>
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="h-16 w-16 text-slate-300 mx-auto mb-4" />
-                      <p className="text-slate-500">Upload a file to configure print settings</p>
-                    </>
-                  )}
+              <p className="font-bold text-slate-900 text-lg">Analyzing...</p>
+              <p className="text-sm text-slate-500">Checking page count</p>
+            </div>
+          ) : uploading ? (
+            <div className="w-full max-w-[240px] text-center animate-in fade-in zoom-in duration-300">
+              <div className="bg-blue-50 p-4 rounded-full inline-block mb-4">
+                 <Upload className="w-8 h-8 text-blue-600 animate-bounce" />
+              </div>
+              <p className="font-bold text-slate-900 text-lg mb-4">Uploading {uploadProgress}%</p>
+              <div className="h-3 bg-slate-100 rounded-full overflow-hidden w-full">
+                <div className="h-full bg-blue-600 transition-all duration-300 ease-out" style={{ width: `${uploadProgress}%` }} />
+              </div>
+              <p className="text-xs text-slate-400 mt-4 animate-pulse">You can configure settings below while waiting</p>
+            </div>
+          ) : uploadComplete ? (
+             <div className="text-center animate-in fade-in zoom-in duration-300 w-full p-6">
+                <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-4 mx-auto shadow-sm ring-4 ring-green-50">
+                   <CheckCircle className="w-8 h-8" />
                 </div>
-              </Card>
-            )}
-          </div>
+                <h3 className="text-xl font-bold text-slate-900 mb-1">Upload Complete</h3>
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg shadow-sm text-sm font-medium text-slate-700 max-w-full truncate mb-6">
+                   <FileText size={14} className="text-blue-500 shrink-0" />
+                   <span className="truncate">{uploadedFile?.name}</span>
+                </div>
+                
+                <Button 
+                   variant="outline" 
+                   size="sm" 
+                   onClick={(e) => { e.stopPropagation(); window.location.reload(); }} 
+                   className="text-slate-500 hover:text-red-600 hover:bg-red-50 border-slate-200 rounded-full px-4"
+                >
+                   <X className="w-4 h-4 mr-1.5" /> Change File
+                </Button>
+             </div>
+          ) : (
+             <div className="text-center p-6">
+                <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-4 mx-auto group-hover:scale-110 transition-transform shadow-sm">
+                   <Upload className="w-8 h-8" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-900">Tap to Upload</h3>
+                <p className="text-sm text-slate-500 mt-1 mb-6 max-w-[220px] mx-auto leading-relaxed">
+                   Upload your PDF, DOCX, or Images to start printing.
+                </p>
+                <Button className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-200 px-6">
+                   Browse Files
+                </Button>
+             </div>
+          )}
         </div>
+
+        {/* Settings Panel (Visible during AND after upload) */}
+        {showSettings && (
+           <div className="space-y-6 animate-in slide-in-from-bottom-8 duration-500 pb-8">
+              <div className="flex items-center justify-between px-1">
+                 <h2 className="text-lg font-bold text-slate-900">Print Settings</h2>
+                 {fileInfo && (
+                    <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-md animate-in fade-in">
+                        {fileInfo.totalPages} Pages Detected
+                    </span>
+                 )}
+              </div>
+
+              {/* Copies Stepper */}
+              <Card className="border-0 shadow-sm ring-1 ring-slate-100 bg-white overflow-hidden">
+                 <div className="p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                       <div className="bg-blue-50 p-2 rounded-xl text-blue-600"><Copy size={20} /></div>
+                       <Label className="font-bold text-slate-700">Copies</Label>
+                    </div>
+                    <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200">
+                       <button onClick={() => setCopies(c => Math.max(1, c - 1))} className="w-10 h-10 flex items-center justify-center bg-white rounded-lg shadow-sm border border-slate-100 active:scale-95 transition-transform">
+                          <span className="text-xl font-bold text-slate-600">-</span>
+                       </button>
+                       <span className="w-10 text-center font-bold text-lg text-slate-900">{copies}</span>
+                       <button onClick={() => setCopies(c => c + 1)} className="w-10 h-10 flex items-center justify-center bg-white rounded-lg shadow-sm border border-slate-100 active:scale-95 transition-transform">
+                          <span className="text-xl font-bold text-slate-600">+</span>
+                       </button>
+                    </div>
+                 </div>
+              </Card>
+
+              {/* Color Mode Cards */}
+              {printer.capabilities.supportsColor && (
+                 <div className="space-y-2">
+                    <Label className="px-1 text-sm font-semibold text-slate-500 uppercase tracking-wider">Color Mode</Label>
+                    <RadioGroup value={colorMode} onValueChange={(v: any) => setColorMode(v)} className="grid grid-cols-2 gap-3">
+                       <Label 
+                          htmlFor="bw" 
+                          className={`relative flex flex-col items-center p-4 rounded-2xl border-2 transition-all cursor-pointer ${
+                             colorMode === 'bw' 
+                             ? 'border-slate-800 bg-slate-50 shadow-md' 
+                             : 'border-white bg-white shadow-sm'
+                          }`}
+                       >
+                          <RadioGroupItem value="bw" id="bw" className="sr-only" />
+                          <div className="w-10 h-10 rounded-full bg-slate-800 mb-2 shadow-sm" />
+                          <span className="font-bold text-slate-900">Black & White</span>
+                          <span className="text-xs text-slate-500 font-medium bg-white px-2 py-0.5 rounded-full mt-1 border border-slate-100">
+                             ₹{printer.pricing.bwPerPage}/pg
+                          </span>
+                       </Label>
+
+                       <Label 
+                          htmlFor="color" 
+                          className={`relative flex flex-col items-center p-4 rounded-2xl border-2 transition-all cursor-pointer ${
+                             colorMode === 'color' 
+                             ? 'border-blue-500 bg-blue-50 shadow-md' 
+                             : 'border-white bg-white shadow-sm'
+                          }`}
+                       >
+                          <RadioGroupItem value="color" id="color" className="sr-only" />
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-500 via-orange-400 to-blue-500 mb-2 shadow-sm" />
+                          <span className="font-bold text-slate-900">Color</span>
+                          <span className="text-xs text-slate-500 font-medium bg-white px-2 py-0.5 rounded-full mt-1 border border-slate-100">
+                             ₹{printer.pricing.colorPerPage}/pg
+                          </span>
+                       </Label>
+                    </RadioGroup>
+                 </div>
+              )}
+
+              {/* Layout Options */}
+              <div className="space-y-2">
+                 <Label className="px-1 text-sm font-semibold text-slate-500 uppercase tracking-wider">Layout Options</Label>
+                 <Card className="border-0 shadow-sm ring-1 ring-slate-100 bg-white p-4 space-y-5 rounded-2xl">
+                    {/* Paper Size */}
+                    <div className="flex items-center justify-between">
+                       <div className="flex items-center gap-3">
+                          <div className="bg-orange-50 p-2 rounded-xl text-orange-600"><Files size={20} /></div>
+                          <span className="font-bold text-slate-700">Paper Size</span>
+                       </div>
+                       <Select value={paperSize} onValueChange={setPaperSize}>
+                          <SelectTrigger className="w-[110px] bg-slate-50 border-slate-200 rounded-xl font-semibold">
+                             <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="bg-white z-50 shadow-xl rounded-xl border-slate-100">
+                             {printer.capabilities.paperSizes.map(s => (
+                                <SelectItem key={s} value={s} className="font-medium focus:bg-slate-50 cursor-pointer py-3">{s}</SelectItem>
+                             ))}
+                          </SelectContent>
+                       </Select>
+                    </div>
+
+                    <div className="h-px bg-slate-100 w-full" />
+
+                    {/* Orientation Toggle */}
+                    <div className="flex items-center justify-between">
+                       <div className="flex items-center gap-3">
+                          <div className="bg-indigo-50 p-2 rounded-xl text-indigo-600"><Smartphone size={20} className={orientation === 'landscape' ? 'rotate-90' : ''} /></div>
+                          <span className="font-bold text-slate-700">Orientation</span>
+                       </div>
+                       <div className="flex bg-slate-100 p-1 rounded-xl h-10">
+                          <button 
+                             onClick={() => setOrientation('portrait')}
+                             className={`px-3 rounded-lg text-xs font-bold transition-all ${orientation === 'portrait' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+                          >
+                             Portrait
+                          </button>
+                          <button 
+                             onClick={() => setOrientation('landscape')}
+                             className={`px-3 rounded-lg text-xs font-bold transition-all ${orientation === 'landscape' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+                          >
+                             Landscape
+                          </button>
+                       </div>
+                    </div>
+
+                    <div className="h-px bg-slate-100 w-full" />
+
+                    {/* Duplex Toggle */}
+                    <div className="flex items-center justify-between">
+                       <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-xl transition-colors ${duplex ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>
+                             <Files size={20} />
+                          </div>
+                          <div>
+                             <span className="font-bold text-slate-700 block">Double-Sided</span>
+                             <span className="text-xs text-slate-400 font-medium">Print on both sides</span>
+                          </div>
+                       </div>
+                       <Switch 
+                          checked={duplex} 
+                          onCheckedChange={setDuplex}
+                          disabled={!printer.capabilities.supportsDuplex}
+                          className="data-[state=checked]:bg-green-500 scale-110"
+                       />
+                    </div>
+                 </Card>
+              </div>
+           </div>
+        )}
       </div>
+
+      {/* Floating Action Bar - Shown when file is selected */}
+      {showBottomBar && (
+         <div className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 p-4 pb-safe z-50 shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.1)] animate-in slide-in-from-bottom-full duration-500">
+            <div className="max-w-3xl mx-auto flex items-center justify-between gap-4">
+               <div>
+                  <p className="text-2xl font-bold text-slate-900">₹{estimatedCost}</p>
+                  <p className="text-xs font-medium text-slate-500">Total Estimate</p>
+               </div>
+               <Button 
+                  onClick={handleProceed} 
+                  disabled={!uploadComplete}
+                  className={`
+                    rounded-2xl h-14 px-8 font-bold text-base flex-1 max-w-[200px] transition-all
+                    ${uploadComplete 
+                      ? 'bg-slate-900 text-white shadow-lg shadow-slate-300 hover:bg-slate-800 active:scale-95' 
+                      : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'}
+                  `}
+               >
+                  {uploadComplete ? (
+                    <>Next <ChevronRight className="ml-1 w-5 h-5" /></>
+                  ) : (
+                    <><Loader2 className="mr-2 w-5 h-5 animate-spin" /> Uploading...</>
+                  )}
+               </Button>
+            </div>
+         </div>
+      )}
     </div>
   );
 }

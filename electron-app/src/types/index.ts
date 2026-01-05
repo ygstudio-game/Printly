@@ -64,4 +64,6 @@ export  interface JobsListProps {
   onPrintJob: (job: PrintJob) => void;
   loadingJobId: string | null;
   printingJobId: string | null;
+  onRemoveAllJobs: () => void;               
+  onRemoveJob: (jobId: string) => void;      
 }

@@ -292,6 +292,7 @@ export default function Dashboard() {
       // Pass downloaded path to preview
       setDownloadedPdfPath(pdfPath);
       setPreviewJob(job);
+      console.log('🖥️ Opening print preview for job:', job);
     } catch (error) {
       console.error('❌ Failed to download file:', error);
       setError(error instanceof Error ? error.message : 'Failed to download file for preview');
@@ -356,7 +357,40 @@ async function handlePrintFromPreview(updatedSettings: any) {
     setPreviewJob(null);
     setDownloadedPdfPath('');
   }
+  const handleRemoveJob = async (jobId: string) => {
+    if (!confirm('Are you sure you want to delete this job permanently?')) return;
 
+    try {
+      const result = await window.electron.removeJob(jobId);
+      if (result.success) {
+        setJobs(prev => prev.filter(j => j._id !== jobId));
+      } else {
+        await window.electron.showErrorDialog({
+            title: 'Delete Failed',
+            message: result.error || 'Could not delete job'
+        });
+      }
+    } catch (error) {
+      console.error('Remove job error:', error);
+    }
+  };
+    const handleRemoveAllJobs = async () => {
+    if (!confirm('WARNING: This will permanently delete ALL pending jobs from the database and storage. Continue?')) return;
+
+    try {
+      const result = await window.electron.removeAllJobs();
+      if (result.success) {
+        setJobs([]); // Clear UI immediately
+      } else {
+        await window.electron.showErrorDialog({
+            title: 'Delete Failed',
+            message: result.error || 'Could not delete all jobs'
+        });
+      }
+    } catch (error) {
+      console.error('Remove all jobs error:', error);
+    }
+  };
   const availablePaperSizes = ['A4', 'Letter', 'Legal', 'A3', 'A5', 'Executive', 'Tabloid'];
  if (showHistory) {
     return <History onBack={() => setShowHistory(false)} />;
@@ -416,6 +450,8 @@ async function handlePrintFromPreview(updatedSettings: any) {
       <JobsList
         jobs={jobs}
         onPrintJob={confirmAndPrint}
+        onRemoveJob={handleRemoveJob}      
+        onRemoveAllJobs={handleRemoveAllJobs} 
         loadingJobId={loadingJobId}
         printingJobId={printingJobId}
       />

@@ -1,4 +1,3 @@
-// app/jobs/[id]/page.tsx
 'use client';
 
 import { useEffect, useState, use } from 'react';
@@ -24,7 +23,8 @@ import {
   ArrowLeft,
   RefreshCw,
   Home,
-  Download
+  ChevronRight,
+  Receipt
 } from 'lucide-react';
 import type { PrintJob } from '@/types/printer';
 
@@ -35,63 +35,58 @@ interface Props {
 const statusConfig = {
   pending: {
     icon: Clock,
-    color: 'text-yellow-600',
+    color: 'text-yellow-700',
     bgColor: 'bg-yellow-50',
     borderColor: 'border-yellow-200',
-    gradientFrom: 'from-yellow-400',
-    gradientTo: 'to-orange-400',
+    gradient: 'from-yellow-400 to-orange-500',
     progress: 25,
     title: 'Waiting for Payment',
-    description: 'Your job is in the queue. Please go to the counter to pay and start printing.',
-    action: 'Go to counter to complete payment'
+    description: 'Please proceed to the counter to complete payment.',
+    action: 'Pay at Counter'
   },
   printing: {
     icon: PrinterIcon,
-    color: 'text-blue-600',
+    color: 'text-blue-700',
     bgColor: 'bg-blue-50',
     borderColor: 'border-blue-200',
-    gradientFrom: 'from-blue-500',
-    gradientTo: 'to-indigo-500',
-    progress: 75,
+    gradient: 'from-blue-500 to-indigo-600',
+    progress: 60,
     title: 'Printing in Progress',
-    description: 'Your document is being printed. This will take a few moments.',
-    action: 'Please wait while we print your document'
+    description: 'Your document is currently being printed.',
+    action: 'Printing...'
   },
   completed: {
     icon: CheckCircle2,
-    color: 'text-green-600',
+    color: 'text-green-700',
     bgColor: 'bg-green-50',
     borderColor: 'border-green-200',
-    gradientFrom: 'from-green-500',
-    gradientTo: 'to-emerald-500',
+    gradient: 'from-green-500 to-emerald-600',
     progress: 100,
-    title: 'Ready for Pickup!',
-    description: 'Your prints are ready. Please collect them from the counter.',
-    action: 'Collect your prints from the counter'
+    title: 'Ready for Pickup',
+    description: 'Your prints are ready! Please collect them.',
+    action: 'Collect Prints'
   },
   failed: {
     icon: AlertCircle,
-    color: 'text-red-600',
+    color: 'text-red-700',
     bgColor: 'bg-red-50',
     borderColor: 'border-red-200',
-    gradientFrom: 'from-red-500',
-    gradientTo: 'to-rose-500',
+    gradient: 'from-red-500 to-rose-600',
     progress: 100,
     title: 'Print Failed',
-    description: 'Something went wrong. Please contact the shop staff for assistance.',
-    action: 'Ask shop staff for help'
+    description: 'Something went wrong. Please ask staff for help.',
+    action: 'Contact Staff'
   },
   cancelled: {
     icon: XCircle,
-    color: 'text-gray-600',
-    bgColor: 'bg-gray-50',
-    borderColor: 'border-gray-200',
-    gradientFrom: 'from-gray-500',
-    gradientTo: 'to-slate-500',
+    color: 'text-slate-700',
+    bgColor: 'bg-slate-50',
+    borderColor: 'border-slate-200',
+    gradient: 'from-slate-500 to-gray-600',
     progress: 0,
     title: 'Job Cancelled',
-    description: 'This print job has been cancelled.',
-    action: 'You may start a new print job'
+    description: 'This print job was cancelled.',
+    action: 'Cancelled'
   }
 };
 
@@ -106,19 +101,13 @@ export default function JobTrackingPage({ params }: Props) {
   const fetchJobData = async (isRefresh = false) => {
     try {
       if (isRefresh) setRefreshing(true);
-      
       const jobData = await getJob(id);
       setJob(jobData);
       setLastUpdate(new Date());
-      
-      if (isRefresh) {
-        toast.success('Status updated');
-      }
+      if (isRefresh) toast.success('Status updated');
     } catch (error) {
       console.error('Failed to load job:', error);
-      if (!isRefresh) {
-        toast.error('Failed to load job status');
-      }
+      if (!isRefresh) toast.error('Failed to load job status');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -127,285 +116,178 @@ export default function JobTrackingPage({ params }: Props) {
 
   useEffect(() => {
     fetchJobData();
-
-    // Poll every 10 seconds
-    const interval = setInterval(() => fetchJobData(), 10000);
+    const interval = setInterval(() => fetchJobData(), 5000); // Faster polling for better UX
     return () => clearInterval(interval);
   }, [id]);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="animate-spin h-16 w-16 text-blue-600 mx-auto mb-4" />
-          <p className="text-slate-600 text-lg">Loading job status...</p>
-        </div>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
       </div>
     );
   }
 
   if (!job) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center p-4">
-        <Card className="max-w-md w-full border-slate-200 shadow-lg">
-          <CardContent className="pt-6 text-center">
-            <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <AlertCircle className="w-10 h-10 text-slate-400" />
-            </div>
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">Job Not Found</h2>
-            <p className="text-slate-600 mb-6">The print job you're looking for doesn't exist or has been removed.</p>
-            <Button onClick={() => router.push('/')} className="w-full">
-              <Home className="mr-2 h-4 w-4" />
-              Go Home
-            </Button>
-          </CardContent>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <Card className="max-w-md w-full border-0 shadow-lg text-center p-8">
+           <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-8 h-8 text-red-500" />
+           </div>
+           <h2 className="text-xl font-bold text-slate-900 mb-2">Job Not Found</h2>
+           <Button onClick={() => router.push('/')} className="w-full mt-4 bg-slate-900 text-white">Go Home</Button>
         </Card>
       </div>
     );
   }
 
   const currentStatus = statusConfig[job.status as keyof typeof statusConfig] || statusConfig.pending;
-  const Icon = currentStatus.icon;
+  const StatusIcon = currentStatus.icon;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+    <div className="min-h-screen bg-slate-50 pb-32">
+      
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 shadow-sm">
-        <div className="container mx-auto px-4 py-4 max-w-4xl">
-          <div className="flex items-center justify-between">
-            <Button variant="ghost" onClick={() => router.back()}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => fetchJobData(true)}
-              disabled={refreshing}
-            >
-              <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-          </div>
+      <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-40 px-4 py-3 flex items-center justify-between shadow-sm">
+        <div className="flex items-center gap-2">
+           <Button variant="ghost" size="icon" onClick={() => router.back()} className="-ml-2 text-slate-500 rounded-full hover:bg-slate-100">
+             <ArrowLeft className="w-6 h-6" />
+           </Button>
+           <div>
+              <h1 className="font-bold text-slate-900 leading-tight text-sm">Job #{job.jobNumber}</h1>
+              <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wide">Tracking Status</p>
+           </div>
         </div>
+        <Button 
+           variant="ghost" 
+           size="sm"
+           onClick={() => fetchJobData(true)}
+           disabled={refreshing}
+           className="text-slate-500 hover:bg-slate-100 rounded-full h-8 px-3 text-xs font-medium"
+        >
+           <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+           {refreshing ? 'Updating' : 'Refresh'}
+        </Button>
       </header>
 
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Main Status Card */}
-          <div className="lg:col-span-2">
-            <Card className="border-slate-200 shadow-lg overflow-hidden">
-              {/* Status Header with Gradient */}
-              <div className={`bg-gradient-to-r ${currentStatus.gradientFrom} ${currentStatus.gradientTo} p-6 text-white`}>
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <p className="text-white/80 text-sm font-medium mb-1">Job Number</p>
-                    <h1 className="text-3xl font-bold">#{job.jobNumber}</h1>
-                  </div>
-                  <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
-                    <Icon className="w-9 h-9" />
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <h2 className="text-2xl font-bold">{currentStatus.title}</h2>
-                  <p className="text-white/90">{currentStatus.description}</p>
-                </div>
-              </div>
+      <div className="max-w-3xl mx-auto p-4 space-y-5">
 
-              <CardContent className="p-6">
-                {/* Progress Bar */}
-                <div className="mb-6">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-medium text-slate-700">Progress</span>
-                    <span className="text-sm font-bold text-slate-900">{currentStatus.progress}%</span>
+         {/* Hero Status Card */}
+         <div className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${currentStatus.gradient} shadow-lg text-white p-6`}>
+            <div className="relative z-10">
+               <div className="flex justify-between items-start mb-6">
+                  <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center">
+                     <StatusIcon className="w-6 h-6 text-white" />
                   </div>
-                  <Progress value={currentStatus.progress} className="h-3" />
-                </div>
-
-                {/* Action Banner */}
-                <div className={`${currentStatus.bgColor} ${currentStatus.borderColor} border-2 rounded-xl p-4 mb-6`}>
-                  <p className={`${currentStatus.color} font-semibold text-center flex items-center justify-center gap-2`}>
-                    <Icon className="w-5 h-5" />
-                    {currentStatus.action}
-                  </p>
-                </div>
-
-                {/* Timestamps */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-slate-50 rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-slate-600 text-sm mb-1">
-                      <Calendar className="w-4 h-4" />
-                      <span>Created</span>
-                    </div>
-                    <p className="font-semibold text-slate-900">
-                      {new Date(job.timestamps.created).toLocaleString()}
-                    </p>
+                  <div className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+                     {currentStatus.action}
                   </div>
-                  {job.timestamps.completed && (
-                    <div className="bg-green-50 rounded-lg p-4">
-                      <div className="flex items-center gap-2 text-green-600 text-sm mb-1">
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>Completed</span>
-                      </div>
-                      <p className="font-semibold text-green-900">
-                        {new Date(job.timestamps.completed).toLocaleString()}
-                      </p>
-                    </div>
+               </div>
+               
+               <h2 className="text-2xl font-bold mb-1">{currentStatus.title}</h2>
+               <p className="text-white/80 text-sm mb-6 max-w-[80%]">{currentStatus.description}</p>
+               
+               <div className="space-y-2">
+                  <div className="flex justify-between text-xs font-medium text-white/80">
+                     <span>Progress</span>
+                     <span>{currentStatus.progress}%</span>
+                  </div>
+                  <Progress value={currentStatus.progress} className="h-2 bg-black/20 bg-white" />
+               </div>
+            </div>
+            {/* Background Decoration */}
+            <StatusIcon className="absolute -bottom-6 -right-6 w-48 h-48 text-white opacity-10 rotate-12" />
+         </div>
+
+         {/* Job Details Card */}
+         <Card className="border-0 shadow-sm ring-1 ring-slate-100 bg-white rounded-2xl overflow-hidden">
+            <CardHeader className="border-b border-slate-50 bg-slate-50/50 pb-3">
+               <CardTitle className="text-sm uppercase tracking-wider font-bold text-slate-500 flex items-center gap-2">
+                  <Receipt className="w-4 h-4" /> Order Details
+               </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+               <div className="divide-y divide-slate-100">
+                  {/* File Info */}
+                  <div className="p-4 flex items-center gap-4">
+                     <div className="bg-blue-50 p-3 rounded-xl text-blue-600">
+                        <FileText size={20} />
+                     </div>
+                     <div>
+                        <p className="font-bold text-slate-900 text-sm">{job.fileName}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                           {job.settings.totalPages} Pages • {job.settings.copies} Copies
+                        </p>
+                     </div>
+                  </div>
+
+                  {/* Settings Grid */}
+                  <div className="grid grid-cols-2 text-sm">
+                     <div className="p-4 border-r border-slate-100">
+                        <span className="text-xs text-slate-500 block mb-1">Color Mode</span>
+                        <div className="flex items-center gap-1.5 font-semibold text-slate-900 capitalize">
+                           <Palette size={14} className="text-slate-400"/> {job.settings.colorMode === 'color' ? 'Color' : 'B&W'}
+                        </div>
+                     </div>
+                     <div className="p-4">
+                        <span className="text-xs text-slate-500 block mb-1">Paper</span>
+                        <div className="flex items-center gap-1.5 font-semibold text-slate-900">
+                           <Copy size={14} className="text-slate-400"/> {job.settings.paperSize}
+                        </div>
+                     </div>
+                  </div>
+
+                  {/* Location */}
+                  {job.shopId && (
+                     <div className="p-4 flex items-start gap-3 bg-slate-50/50">
+                        <MapPin size={16} className="text-slate-400 mt-0.5 shrink-0" />
+                        <div>
+                           <p className="font-semibold text-slate-900 text-sm">{job.shopId.shopName}</p>
+                           <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{job.shopId.location.address}</p>
+                        </div>
+                     </div>
                   )}
-                </div>
-              </CardContent>
-            </Card>
+               </div>
+            </CardContent>
+         </Card>
 
-            {/* Shop Info */}
-            {job.shopId && (
-<Card className="mt-6 border-slate-200 shadow-sm">
-  <CardHeader className="pb-3">
-    <CardTitle className="text-lg flex items-center gap-2">
-      <MapPin className="w-5 h-5 text-blue-600" />
-      Shop Location
-    </CardTitle>
-  </CardHeader>
-  <CardContent>
-    <div className="space-y-2">
-      <p className="font-semibold text-slate-900 text-lg">{job.shopId.shopName}</p>
-      <p className="text-slate-600 text-sm">
-        {job.shopId.location.address}, {job.shopId.location.city}
-      </p>
-      {job.shopId.location.coordinates && (
-        <p className="text-xs text-slate-400">
-          Lat: {job.shopId.location.coordinates.lat}, Lng: {job.shopId.location.coordinates.lng}
-        </p>
-      )}
-    </div>
-  </CardContent>
-</Card>
+         {/* Timestamp */}
+         <div className="text-center">
+            <p className="text-xs text-slate-400">
+               Job created at {new Date(job.timestamps.created).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+            </p>
+         </div>
 
-            )}
-          </div>
-
-          {/* Job Details Sidebar */}
-          <div className="space-y-6">
-            {/* Document Info */}
-            <Card className="border-slate-200 shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-blue-600" />
-                  Document
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="bg-slate-50 rounded-lg p-3">
-                    <p className="text-xs text-slate-600 mb-1">File Name</p>
-                    <p className="font-semibold text-slate-900 text-sm break-all">{job.fileName}</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-slate-50 rounded-lg p-3">
-                      <p className="text-xs text-slate-600 mb-1">Pages</p>
-                      <p className="font-bold text-slate-900 text-lg">{job.settings.totalPages}</p>
-                    </div>
-                    <div className="bg-slate-50 rounded-lg p-3">
-                      <p className="text-xs text-slate-600 mb-1">Copies</p>
-                      <p className="font-bold text-slate-900 text-lg">{job.settings.copies}</p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Print Settings */}
-            <Card className="border-slate-200 shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <PrinterIcon className="w-5 h-5 text-blue-600" />
-                  Settings
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3 text-sm">
-                  <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                    <span className="text-slate-600 flex items-center gap-2">
-                      <Palette className="w-4 h-4" />
-                      Color Mode
-                    </span>
-                    <Badge variant={job.settings.colorMode === 'color' ? 'default' : 'secondary'}>
-                      {job.settings.colorMode === 'color' ? 'Color' : 'B&W'}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                    <span className="text-slate-600 flex items-center gap-2">
-                      <Copy className="w-4 h-4" />
-                      Paper Size
-                    </span>
-                    <span className="font-semibold text-slate-900">{job.settings.paperSize}</span>
-                  </div>
-                  <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                    <span className="text-slate-600">Duplex</span>
-                    <Badge variant={job.settings.duplex ? 'default' : 'outline'}>
-                      {job.settings.duplex ? 'Yes' : 'No'}
-                    </Badge>
-                  </div>
-                  {job.settings.orientation && (
-                    <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                      <span className="text-slate-600">Orientation</span>
-                      <span className="font-semibold text-slate-900 capitalize">{job.settings.orientation}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between py-2">
-                    <span className="text-slate-600">Page Range</span>
-                    <span className="font-semibold text-slate-900">{job.settings.pageRanges || 'All'}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Cost Summary */}
-            <Card className="border-slate-200 shadow-lg bg-gradient-to-br from-blue-600 to-indigo-600 text-white">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg text-white">Total Cost</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-blue-100 text-sm mb-1">Amount to Pay</p>
-                    <p className="text-4xl font-bold">₹{job.estimatedCost.toFixed(2)}</p>
-                  </div>
-                  <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center">
-                    <span className="text-2xl">💰</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="mt-8 flex flex-col sm:flex-row gap-4">
-          <Button 
-            variant="outline" 
-            size="lg"
-            onClick={() => router.push('/history')}
-            className="flex-1"
-          >
-            <FileText className="mr-2 h-5 w-5" />
-            View All Jobs
-          </Button>
-          <Button 
-            size="lg"
-            onClick={() => router.push('/')}
-            className="flex-1"
-          >
-            <Home className="mr-2 h-5 w-5" />
-            Print Another Document
-          </Button>
-        </div>
-
-        {/* Last Updated */}
-        <p className="text-center text-sm text-slate-500 mt-6">
-          Last updated: {lastUpdate.toLocaleTimeString()} • Auto-refreshes every 10 seconds
-        </p>
       </div>
+
+      {/* Floating Action Bar (Mobile First) */}
+      <div className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 p-4 pb-safe z-50 shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.1)]">
+         <div className="max-w-3xl mx-auto flex items-center justify-between gap-4">
+            <div>
+               <p className="text-2xl font-bold text-slate-900">₹{job.estimatedCost.toFixed(2)}</p>
+               <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Total Amount</p>
+            </div>
+            
+            <div className="flex gap-2">
+               <Button 
+                  variant="outline"
+                  size="icon"
+                  onClick={() => router.push('/')}
+                  className="rounded-xl h-12 w-12 border-slate-200"
+               >
+                  <Home size={20} className="text-slate-600" />
+               </Button>
+               <Button 
+                  onClick={() => router.push('/history')}
+                  className="bg-slate-900 hover:bg-slate-800 text-white rounded-xl h-12 px-6 shadow-lg shadow-slate-200 font-bold text-sm"
+               >
+                  My Orders
+               </Button>
+            </div>
+         </div>
+      </div>
+
     </div>
   );
 }

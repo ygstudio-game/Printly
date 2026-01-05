@@ -16,7 +16,7 @@ import shopsRoutes from './routes/shops';
 import printersRoutes from './routes/printers';
 import jobsRoutes from './routes/jobs';
 import filesRoutes from './routes/files';
-
+import adminRoutes from './routes/admin';
 import PrintJob from './models/PrintJob';
 
 const app = express();
@@ -25,7 +25,7 @@ const wss = new WebSocketServer({ server });
 
 // Middleware
 const allowedOrigins = process.env.NODE_ENV === 'production'
-  ? ['https://printly.com']
+  ? ['https://printly.vercel.app']
   : ['http://localhost:3000'];
 
 app.use(cors({
@@ -45,6 +45,7 @@ app.use('/api/shops',shopsRoutes);
 app.use('/api/printers',printersRoutes);
 app.use('/api/jobs',jobsRoutes);
 app.use('/api/files',filesRoutes);
+app.use('/api/admin', adminRoutes);  
 
 // ✅ Simple WebSocket - Track by shopId only
 const shopConnections = new Map<string, Set<WebSocket>>();

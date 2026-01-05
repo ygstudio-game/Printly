@@ -1,20 +1,9 @@
 // src/renderer/components/JobsList.tsx
 import React, { useState, useMemo } from 'react';
-import { 
-  Loader2, 
-  Search, 
-  Clock, 
-  FileText, 
-  Printer, 
-  User,
-  ArrowUpDown,
-  Filter,
-  X,
-  Calendar
-} from 'lucide-react';
+import { Loader2, Search, Clock, FileText, Printer, User, ArrowUpDown, Filter, X, Trash2 } from 'lucide-react';
 import { PrintJob, JobsListProps } from '../../types/index';
 
-export default function JobsList({ jobs, onPrintJob, loadingJobId, printingJobId }: JobsListProps) {
+export default function JobsList({ jobs, onPrintJob, onRemoveJob, onRemoveAllJobs, loadingJobId, printingJobId }: JobsListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'color' | 'bw'>('all');
   const [sortBy, setSortBy] = useState<'queue' | 'time' | 'amount'>('queue');
@@ -27,22 +16,17 @@ export default function JobsList({ jobs, onPrintJob, loadingJobId, printingJobId
         job.jobNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
         job.fileName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (job.printerName && job.printerName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (job.userName && job.userName.toLowerCase().includes(searchQuery.toLowerCase())); // ✅ Use userName
+        (job.userName && job.userName.toLowerCase().includes(searchQuery.toLowerCase()));
 
-      const matchesFilter = 
-        filterStatus === 'all' ||
-        job.settings.colorMode === filterStatus;
-
+      const matchesFilter = filterStatus === 'all' || job.settings.colorMode === filterStatus;
       return matchesSearch && matchesFilter;
     });
 
     // ✅ Sort jobs
     filtered.sort((a, b) => {
       let comparison = 0;
-
       switch (sortBy) {
         case 'queue':
-          // Extract numeric part from job number (e.g., "PRT-0001" -> 1)
           const numA = parseInt(a.jobNumber.split('-')[1] || '0');
           const numB = parseInt(b.jobNumber.split('-')[1] || '0');
           comparison = numA - numB;
@@ -54,7 +38,6 @@ export default function JobsList({ jobs, onPrintJob, loadingJobId, printingJobId
           comparison = a.estimatedCost - b.estimatedCost;
           break;
       }
-
       return sortOrder === 'asc' ? comparison : -comparison;
     });
 
@@ -82,7 +65,6 @@ export default function JobsList({ jobs, onPrintJob, loadingJobId, printingJobId
     return date.toLocaleDateString();
   };
 
-
   const totalAmount = filteredAndSortedJobs.reduce((sum, job) => sum + job.estimatedCost, 0);
 
   return (
@@ -101,6 +83,16 @@ export default function JobsList({ jobs, onPrintJob, loadingJobId, printingJobId
               )}
             </p>
           </div>
+          {/* ✅ Remove All Button */}
+          {jobs.length > 0 && (
+            <button 
+              onClick={onRemoveAllJobs}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-100"
+            >
+              <Trash2 size={14} />
+              Clear All
+            </button>
+          )}
         </div>
 
         {/* Search Bar */}
@@ -125,7 +117,6 @@ export default function JobsList({ jobs, onPrintJob, loadingJobId, printingJobId
 
         {/* Filters and Sort */}
         <div className="flex flex-wrap gap-3 items-center">
-          {/* Color Filter */}
           <div className="flex items-center gap-2">
             <Filter size={18} className="text-slate-500" />
             <div className="flex gap-2">
@@ -251,6 +242,7 @@ export default function JobsList({ jobs, onPrintJob, loadingJobId, printingJobId
                 key={job._id}
                 job={job}
                 queuePosition={index + 1}
+                onRemove={onRemoveJob} 
                 onPrint={onPrintJob}
                 isLoading={loadingJobId === job._id}
                 isPrinting={printingJobId === job._id}
@@ -268,24 +260,53 @@ export default function JobsList({ jobs, onPrintJob, loadingJobId, printingJobId
 interface JobCardProps {
   job: PrintJob;
   queuePosition: number;
+  onRemove: (jobId: string) => void;      
   onPrint: (job: PrintJob) => void;
   isLoading: boolean;
   isPrinting: boolean;
   formatTime: (date: string) => string;
 }
 
-function JobCard({ job, queuePosition, onPrint, isLoading, isPrinting, formatTime }: JobCardProps) {
-  const isActive = isLoading || isPrinting;
+function JobCard({ job, queuePosition, onPrint, isLoading, isPrinting, onRemove, formatTime }: JobCardProps) {
+  const [isDeleting, setIsDeleting] = useState(false); // ✅ Local deleting state
+  const isActive = isLoading || isPrinting || isDeleting;
+
+  const handleRemove = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsDeleting(true);
+    // Add a small delay for better UX or await the actual removal logic
+    try {
+        await onRemove(job._id);
+    } catch (error) {
+        setIsDeleting(false); // Reset if error
+    }
+  };
 
   return (
-    <div className={`bg-white rounded-2xl shadow-md border-2 transition-all hover:shadow-xl hover:-translate-y-1 ${
+    <div className={`bg-white rounded-2xl shadow-md border-2 transition-all hover:shadow-xl hover:-translate-y-1 relative group ${
       isActive ? 'border-blue-500 ring-4 ring-blue-100' : 'border-slate-200'
     }`}>
       {/* Queue Position Badge */}
-      <div className="relative">
-        <div className="absolute -top-3 -left-3 w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg z-10">
+      <div className="absolute -top-3 -left-3 z-20">
+        <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg">
           #{queuePosition}
         </div>
+      </div>
+
+      {/* ✅ Remove Button (Always Visible, Top Right) */}
+      <div className="absolute top-2 right-2 z-20">
+         <button 
+           onClick={handleRemove}
+           disabled={isActive}
+           className="p-2 bg-white text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full shadow-sm border border-slate-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+           title="Remove Job"
+         >
+           {isDeleting ? (
+             <Loader2 size={16} className="animate-spin text-red-600" />
+           ) : (
+             <Trash2 size={16} />
+           )}
+         </button>
       </div>
 
       {/* Header */}
@@ -299,8 +320,8 @@ function JobCard({ job, queuePosition, onPrint, isLoading, isPrinting, formatTim
               <h3 className="font-bold text-slate-900 text-lg">{job.jobNumber}</h3>
               <div className="flex items-center gap-1.5 text-xs text-slate-500">
                 <Clock size={12} />
-{formatTime(job.timestamps?.created.toString())}          
-    </div>
+                {formatTime(job.timestamps?.created.toString())}          
+              </div>
             </div>
           </div>
           
@@ -318,10 +339,10 @@ function JobCard({ job, queuePosition, onPrint, isLoading, isPrinting, formatTim
         </p>
 
         {/* Customer Name */}
-        {job.userName  && (
+        {job.userName && (
           <div className="flex items-center gap-2 text-sm text-slate-600 bg-slate-50 px-3 py-2 rounded-lg">
             <User size={16} className="text-slate-500" />
-            <span className="font-medium">{job.userName }</span>
+            <span className="font-medium">{job.userName}</span>
           </div>
         )}
       </div>
@@ -382,7 +403,8 @@ function JobCard({ job, queuePosition, onPrint, isLoading, isPrinting, formatTim
         ) : (
           <button 
             onClick={() => onPrint(job)}
-            className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-3.5 rounded-xl font-bold transition-all transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+            disabled={isDeleting}
+            className={`w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-3.5 rounded-xl font-bold transition-all transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl flex items-center justify-center gap-2 ${isDeleting ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <Printer size={20} />
             Print & Collect
