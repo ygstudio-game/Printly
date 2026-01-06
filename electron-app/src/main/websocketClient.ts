@@ -349,7 +349,8 @@ export class WebSocketClient extends EventEmitter {
           }
         });
         const data: any = await res.json();
-
+        console.log('🔄 Polling for jobs...');
+        console.log('📡 Poll response:', data);
         if (data.success && data.jobs && data.jobs.length > 0) {
           console.log(`📥 Found ${data.jobs.length} pending jobs.`);
 

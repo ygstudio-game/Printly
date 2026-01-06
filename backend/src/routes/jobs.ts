@@ -30,6 +30,50 @@ async function generateJobNumber(): Promise<string> {
   const seq = await getNextSequence('jobNumber');
   return `PRT-${String(seq).padStart(4, '0')}`; // PRT-0001, PRT-0002...
 }
+
+
+
+//  ...testing new simluating websocket polling  as vercel does not support websockets
+//  Polling Endpoint for Printers
+// GET /api/jobs/poll?shopId=...
+router.get('/poll', async (req, res) => {
+  try {
+    const { shopId } = req.query;
+
+    // Optional: Add Auth Check here if you want strict security
+    // const authHeader = req.headers.authorization;
+    // if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+
+    if (!shopId) {
+      return res.status(400).json({ success: false, error: 'shopId required' });
+    }
+
+    // Find Shop Object ID from the string ID
+    const shop = await Shop.findOne({ shopId: shopId });
+    if (!shop) {
+       // If shop not found, return empty list or error
+       return res.json({ success: true, jobs: [] });
+    }
+
+    // 1. Find jobs that are 'pending' (waiting to be printed)
+    // Use the Shop's internal _id for the query
+    const jobs = await PrintJob.find({
+      shopId: shop._id, // ✅ Query by ObjectId, not string ID
+      status: 'pending'
+    }).sort({ createdAt: 1 });
+
+    res.json({ 
+      success: true, 
+      jobs: jobs 
+    });
+
+  } catch (error) {
+    console.error('Poll error:', error);
+    res.status(500).json({ success: false, error: 'Polling failed' });
+  }
+});
+
+
 // ✅ Create job (single route, no duplicate)
 router.post('/', authMiddleware, async (req: Request, res: Response) => {
   try {
@@ -339,47 +383,6 @@ router.delete('/shop/:shopId/all', authMiddleware, async (req: AuthRequest, res:
 
 
 
-
-
-// ... existing imports ...testing new simluating websocket polling  as vercel does not support websockets
-//  Polling Endpoint for Printers
-// GET /api/jobs/poll?shopId=...
-router.get('/poll', async (req, res) => {
-  try {
-    const { shopId } = req.query;
-
-    // Optional: Add Auth Check here if you want strict security
-    // const authHeader = req.headers.authorization;
-    // if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
-
-    if (!shopId) {
-      return res.status(400).json({ success: false, error: 'shopId required' });
-    }
-
-    // Find Shop Object ID from the string ID
-    const shop = await Shop.findOne({ shopId: shopId });
-    if (!shop) {
-       // If shop not found, return empty list or error
-       return res.json({ success: true, jobs: [] });
-    }
-
-    // 1. Find jobs that are 'pending' (waiting to be printed)
-    // Use the Shop's internal _id for the query
-    const jobs = await PrintJob.find({
-      shopId: shop._id, // ✅ Query by ObjectId, not string ID
-      status: 'pending'
-    }).sort({ createdAt: 1 });
-
-    res.json({ 
-      success: true, 
-      jobs: jobs 
-    });
-
-  } catch (error) {
-    console.error('Poll error:', error);
-    res.status(500).json({ success: false, error: 'Polling failed' });
-  }
-});
-
+ 
 
 export default router;
