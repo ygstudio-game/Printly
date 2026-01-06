@@ -18,7 +18,7 @@ export class PrintManager {
   private tempDir: string;
   private localStore: LocalStore;
   private backendUrl: string;
-  private conversionWindow: BrowserWindow | null = null; // ✅ Reuse window
+  private conversionWindow: BrowserWindow | null = null; // Reuse window
 
   constructor(localStore: LocalStore) {
     this.localStore = localStore;

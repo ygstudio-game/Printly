@@ -69,7 +69,34 @@ windowsPrinterDetector = new WindowsPrinterDetector(mainWindow!, localStore);
     mainWindow!, 
     localStore
   );
-  
+    wsClient.on('open', () => {
+    console.log('✅ Poller connected to backend');
+  });
+
+  wsClient.on('message', async (data: string) => {
+    try {
+      const message = JSON.parse(data);
+      console.log('📨 Received message:', message.type);
+
+      if (message.type === 'NEW_JOB') {
+        const job = message.job;
+        console.log('📥 New job received:', job.jobNumber);
+        
+        // 1. Add to local store
+        localStore.addJob(job);
+        
+        // 2. Notify UI
+        if (mainWindow) {
+          mainWindow.webContents.send('new-job', job);
+        }
+
+        // 3. Optional: Auto-print if desired
+        // await printManager.printJob(job);
+      }
+    } catch (err) {
+      console.error('Error parsing message:', err);
+    }
+  });
   wsClient.connect();
 });
 

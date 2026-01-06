@@ -25,7 +25,7 @@ const wss = new WebSocketServer({ server });
 
 // Middleware
 const allowedOrigins = process.env.NODE_ENV === 'production'
-  ? process.env.FRONTEND_URL_PRODUCTION || 'http://printly.'
+  ? process.env.FRONTEND_URL_PRODUCTION || 'https://printlyapp.vercel.app'
   : ['http://localhost:3000'];
 
 app.use(cors({

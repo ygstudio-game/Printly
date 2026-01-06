@@ -336,4 +336,40 @@ router.delete('/shop/:shopId/all', authMiddleware, async (req: AuthRequest, res:
     res.status(500).json({ error: 'Failed to delete jobs' });
   }
 });
+
+
+
+
+
+// ... existing imports ...testing new simluating websocket polling  as vercel does not support websockets
+//  Polling Endpoint for Printers
+// GET /api/jobs/poll?shopId=...
+router.get('/poll', async (req, res) => {
+  try {
+    const { shopId } = req.query;
+
+    if (!shopId) {
+      return res.status(400).json({ success: false, error: 'shopId required' });
+    }
+
+    // 1. Find jobs that are 'pending' (waiting to be printed)
+    // We sort by createdAt to print oldest first (FIFO queue)
+    const jobs = await PrintJob.find({
+      shopId: shopId,
+      status: 'pending'
+    }).sort({ createdAt: 1 });
+
+    res.json({ 
+      success: true, 
+      jobs: jobs 
+    });
+
+  } catch (error) {
+    console.error('Poll error:', error);
+    res.status(500).json({ success: false, error: 'Polling failed' });
+  }
+});
+
+
+
 export default router;
