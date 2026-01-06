@@ -52,7 +52,7 @@ const PROD_CONFIG = {
 
 const DEV_CONFIG = {
   // BACKEND_URL: 'ws://localhost:3001',
-  BACKEND_URL: 'ws://printly-backend.vercel.app', 
+  BACKEND_URL: 'https://printly-backend.vercel.app', 
 
   SUPABASE_URL: PROD_CONFIG.SUPABASE_URL,
   SUPABASE_ANON_KEY: PROD_CONFIG.SUPABASE_ANON_KEY,

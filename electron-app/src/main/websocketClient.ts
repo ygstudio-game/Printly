@@ -27,7 +27,7 @@
 //     this.printerId = printerId;
 //     this.window = window;
 //     this.localStore = localStore;
-    
+
 //     this.shopId = localStore.get('shopId') as string || '';
 
 //     // ✅ Listen for app quit events
@@ -50,7 +50,7 @@
 //       // ✅ Connect with shopId AND printerId in URL
 //       const wsUrl = `${this.backendUrl}?shopId=${this.shopId}&printerId=${this.printerId}`;
 //       console.log('🔌 Connecting to:', wsUrl);
-      
+
 //       this.ws = new WebSocket(wsUrl);
 
 //       this.ws.on('open', () => {
@@ -62,13 +62,13 @@
 
 //         console.log('✅ WebSocket connected to cloud');
 //         this.reconnectAttempts = 0;
-        
+
 //         // ✅ CRITICAL: Send REGISTER message immediately after connection
 //         this.sendRegisterMessage();
-        
+
 //         // ✅ Start heartbeat to keep connection alive
 //         this.startHeartbeat();
-        
+
 //         this.safeSend('ws-status', 'connected');
 //       });
 
@@ -108,10 +108,10 @@
 
 //       this.ws.on('close', (code, reason) => {
 //         console.log(`🔌 WebSocket disconnected (code: ${code}, reason: ${reason.toString()})`);
-        
+
 //         // Stop heartbeat
 //         this.stopHeartbeat();
-        
+
 //         this.safeSend('ws-status', 'disconnected');
 
 //         // ✅ Only reconnect if not closing
@@ -197,7 +197,7 @@
 
 //     if (this.reconnectAttempts < this.maxReconnectAttempts) {
 //       this.reconnectAttempts++;
-      
+
 //       // Clear existing timeout
 //       if (this.reconnectTimeout) {
 //         clearTimeout(this.reconnectTimeout);
@@ -243,7 +243,7 @@
 //         }
 
 //         this.ws.removeAllListeners();
-        
+
 //         if (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING) {
 //           this.ws.close();
 //         }
@@ -261,19 +261,19 @@
 //   // ✅ Reconnect with new shopId (for logout/login)
 //   reconnectWithShopId(shopId: string) {
 //     console.log('🔄 Reconnecting with new shopId:', shopId);
-    
+
 //     this.shopId = shopId;
 //     this.isClosing = false;
 //     this.reconnectAttempts = 0;
-    
+
 //     // Update in local store
 //     this.localStore.set('shopId', shopId);
-    
+
 //     // Close existing connection
 //     if (this.ws) {
 //       this.ws.close();
 //     }
-    
+
 //     // Connect with new shopId
 //     setTimeout(() => this.connect(), 1000);
 //   }
@@ -281,7 +281,7 @@
 //   // ✅ Get connection status
 //   getStatus(): 'connected' | 'disconnected' | 'connecting' {
 //     if (!this.ws) return 'disconnected';
-    
+
 //     switch (this.ws.readyState) {
 //       case WebSocket.OPEN:
 //         return 'connected';
@@ -297,7 +297,8 @@
 import { BrowserWindow, app } from 'electron';
 import { LocalStore } from './localStore';
 import { EventEmitter } from 'events';
-import fetch from 'node-fetch'; 
+import fetch from 'node-fetch';
+
 
 export class WebSocketClient extends EventEmitter {
   private pollInterval: NodeJS.Timeout | null = null;
@@ -318,10 +319,10 @@ export class WebSocketClient extends EventEmitter {
 
   connect() {
     if (this.isRunning || !this.shopId) return;
-    
+
     console.log('🔄 Starting Job Poller for Shop:', this.shopId);
     this.isRunning = true;
-    
+
     // Simulate "Connected" state to UI
     this.emit('open');
     this.safeSend('ws-status', 'connected');
@@ -336,16 +337,26 @@ export class WebSocketClient extends EventEmitter {
 
       try {
         const url = `${this.backendUrl}/api/jobs/poll?shopId=${this.shopId}`;
-        const res = await fetch(url);
-        const data : any = await res.json();
+        // Get the token from storage
+        const token = this.localStore.get('token');
+
+        // Add headers
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}` 
+          }
+        });
+        const data: any = await res.json();
 
         if (data.success && data.jobs && data.jobs.length > 0) {
           console.log(`📥 Found ${data.jobs.length} pending jobs.`);
-          
+
           for (const job of data.jobs) {
             // Check if we already processed this job locally to avoid duplicates
             // (Optional safety check if your backend doesn't update status fast enough)
-            
+
             // Emit "message" event exactly like the old WebSocket did
             this.emit('message', JSON.stringify({
               type: 'NEW_JOB',

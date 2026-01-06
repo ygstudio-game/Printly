@@ -69,6 +69,8 @@ windowsPrinterDetector = new WindowsPrinterDetector(mainWindow!, localStore);
     mainWindow!, 
     localStore
   );
+
+  // WebSocket Event Handlers new for fixing the vercel websocket issue these two event onwsclient on
     wsClient.on('open', () => {
     console.log('✅ Poller connected to backend');
   });

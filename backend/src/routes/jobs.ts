@@ -78,13 +78,13 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
     });
 
     // ✅ Notify with complete job object
-    const { notifyShop } = await import('../server.js');
+    // const { notifyShop } = await import('../server.js');
     const jobData = {
       ...job.toObject(),
       _id: job._id.toString(),
       shopId: shopId // Use original shopId string for WebSocket
     };
-    notifyShop(shopId, jobData);
+    // notifyShop(shopId, jobData);
 
     res.json({ jobNumber, jobId: job._id });
   } catch (error: any) {
@@ -348,14 +348,25 @@ router.get('/poll', async (req, res) => {
   try {
     const { shopId } = req.query;
 
+    // Optional: Add Auth Check here if you want strict security
+    // const authHeader = req.headers.authorization;
+    // if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+
     if (!shopId) {
       return res.status(400).json({ success: false, error: 'shopId required' });
     }
 
+    // Find Shop Object ID from the string ID
+    const shop = await Shop.findOne({ shopId: shopId });
+    if (!shop) {
+       // If shop not found, return empty list or error
+       return res.json({ success: true, jobs: [] });
+    }
+
     // 1. Find jobs that are 'pending' (waiting to be printed)
-    // We sort by createdAt to print oldest first (FIFO queue)
+    // Use the Shop's internal _id for the query
     const jobs = await PrintJob.find({
-      shopId: shopId,
+      shopId: shop._id, // ✅ Query by ObjectId, not string ID
       status: 'pending'
     }).sort({ createdAt: 1 });
 
@@ -369,7 +380,6 @@ router.get('/poll', async (req, res) => {
     res.status(500).json({ success: false, error: 'Polling failed' });
   }
 });
-
 
 
 export default router;
