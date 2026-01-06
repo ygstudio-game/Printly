@@ -1,5 +1,5 @@
 import express from 'express';
-import PrintJob from '../models/PrintJob';
+import PrintJob from '../models/PrintJob.js';
 
 const router = express.Router();
 
