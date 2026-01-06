@@ -292,13 +292,11 @@
 //     }
 //   }
 // }
-
 // electron/websocketClient.ts
 import { BrowserWindow, app } from 'electron';
 import { LocalStore } from './localStore';
 import { EventEmitter } from 'events';
-import fetch from 'node-fetch';
-
+import fetch from 'node-fetch'; 
 
 export class WebSocketClient extends EventEmitter {
   private pollInterval: NodeJS.Timeout | null = null;
@@ -308,9 +306,11 @@ export class WebSocketClient extends EventEmitter {
   private localStore: LocalStore;
   private isRunning = false;
 
+  // ✅ 1. ADD THIS: Memory of jobs we've already handled this session
+  private processedJobIds = new Set<string>();
+
   constructor(backendUrl: string, printerId: string, window: BrowserWindow, localStore: LocalStore) {
     super();
-    // Ensure we use HTTP for polling
     this.backendUrl = backendUrl.replace('ws://', 'http://').replace('wss://', 'https://');
     this.window = window;
     this.localStore = localStore;
@@ -319,11 +319,10 @@ export class WebSocketClient extends EventEmitter {
 
   connect() {
     if (this.isRunning || !this.shopId) return;
-
+    
     console.log('🔄 Starting Job Poller for Shop:', this.shopId);
     this.isRunning = true;
-
-    // Simulate "Connected" state to UI
+    
     this.emit('open');
     this.safeSend('ws-status', 'connected');
 
@@ -331,16 +330,13 @@ export class WebSocketClient extends EventEmitter {
   }
 
   private startPolling() {
-    // Poll every 5 seconds
     this.pollInterval = setInterval(async () => {
       if (!this.isRunning) return;
 
       try {
         const url = `${this.backendUrl}/api/jobs/poll?shopId=${this.shopId}`;
-        // Get the token from storage
         const token = this.localStore.get('token');
 
-        // Add headers
         const res = await fetch(url, {
           method: 'GET',
           headers: {
@@ -349,30 +345,32 @@ export class WebSocketClient extends EventEmitter {
           }
         });
         const data: any = await res.json();
-        console.log('🔄 Polling for jobs...');
-        console.log('📡 Poll response:', data);
+
         if (data.success && data.jobs && data.jobs.length > 0) {
-          console.log(`📥 Found ${data.jobs.length} pending jobs.`);
-
+          
           for (const job of data.jobs) {
-            // Check if we already processed this job locally to avoid duplicates
-            // (Optional safety check if your backend doesn't update status fast enough)
+            // ✅ 2. CHECK: Have we seen this job ID before?
+            if (this.processedJobIds.has(job._id)) {
+               // Skip it, we already know about it
+               continue; 
+            }
 
-            // Emit "message" event exactly like the old WebSocket did
+            // ✅ 3. MARK IT: Add to our memory so we don't process it again
+            this.processedJobIds.add(job._id);
+            console.log(`📥 NEW JOB Found: ${job.jobNumber}`);
+
             this.emit('message', JSON.stringify({
               type: 'NEW_JOB',
               job: job
             }));
           }
         }
-      } catch (err) {
-        console.error('⚠️ Polling error:', err);
-        // Don't stop polling, just retry next time
+      } catch (err: any) {
+        console.error('⚠️ Polling error:', err.message || err);
       }
     }, 5000);
   }
 
-  // Helper to send updates to the specific Printer Window
   private safeSend(channel: string, data: any) {
     if (this.window && !this.window.isDestroyed()) {
       this.window.webContents.send(channel, data);
@@ -382,6 +380,7 @@ export class WebSocketClient extends EventEmitter {
   reconnectWithShopId(newShopId: string) {
     this.shopId = newShopId;
     this.localStore.set('shopId', newShopId);
+    this.processedJobIds.clear(); // ✅ Clear memory on shop switch
     this.close();
     this.connect();
   }
@@ -390,6 +389,6 @@ export class WebSocketClient extends EventEmitter {
     this.isRunning = false;
     if (this.pollInterval) clearInterval(this.pollInterval);
     this.emit('close');
-    console.log('cx Polling stopped');
+    console.log('🛑 Polling stopped');
   }
 }
